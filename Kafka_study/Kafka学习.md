@@ -114,6 +114,33 @@ kafka使用第二种,可能存在问题，消费者一直询问
 
 `kafka-topics --list --zookeeper localhost:2181`
 
+```go
+func main() {
+	conn, err := kafka.Dial("tcp", "localhost:9092")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer conn.Close()
+
+	// 得到所有分区的相关信息
+	partitions, err := conn.ReadPartitions()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// 因为一个topic可能又多个分区,去重
+	m := map[string]struct{}{}
+	for _, p := range partitions {
+		m[p.Topic] = struct{}{}
+	}
+
+	// 列出所有topic
+	for k := range m {
+		fmt.Println(k)
+	}
+}
+```
+
 ### 2.创建Topic
 
 `kafka-topics --create --zookeeper localhost:2181 --topic first --partitions 1 --replication-factor 1`
@@ -121,6 +148,31 @@ kafka使用第二种,可能存在问题，消费者一直询问
 - --topic 定义 topic 名,这里建立了一个名字叫`first`的topic
 - --replication-factor 定义副本数
 - --partitions 定义分区数
+
+***默认auto.create.topics.enable='true'***
+
+```go
+import (
+	"context"
+	"github.com/segmentio/kafka-go"
+)
+
+func main() {
+	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", "my-topic", 0)
+	defer conn.Close()
+	if err != nil {
+		panic(err.Error())
+	}
+}
+```
+
+***auto.create.topics.enable='true'***情况
+
+```text
+https://github.com/segmentio/kafka-go   To Create Topic部分
+```
+
+
 
 ### 3.删除Topic
 
@@ -132,9 +184,9 @@ kafka使用第二种,可能存在问题，消费者一直询问
 
 
 
+
+
 ### 其他问题：副本数不能超过机器数
-
-
 
 ## 07_生产者消费者发送消息
 
@@ -144,9 +196,57 @@ kafka使用第二种,可能存在问题，消费者一直询问
 
 + --bootstrap-server:指定了连接的kafka集群
 
+```go
+func main() {
+	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", "my-topic", 0)
+	if err != nil {
+		log.Fatal("failed to dial leader:", err)
+	}
+	
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+
+	// 使用ReadMessage来接收消息
+	for {
+		m, err := conn.ReadMessage(1000)
+		if err != nil {
+			break
+		}
+		fmt.Println(string(m.Value))
+	}
+	
+	if err := conn.Close(); err != nil {
+		log.Fatal("failed to close connection:", err)
+	}
+}
+```
+
+还有其他接收消息的方式
+
 ### 2.生产者发送消息
 
 `kafka-console-producer --broker-list localhost:9092 --topic test`
 
 + --broker-list:指定连接的Kafka集群地址
+
+```go
+func main() {
+	// 建立连接
+	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", "my-topic", 0)
+	defer conn.Close()
+	if err != nil {
+		log.Fatal("failed to dial leader:", err)
+	}
+	// 设置写超时
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	// 写入数据
+	conn.WriteMessages(
+		kafka.Message{Value: []byte("one")},
+		kafka.Message{Value: []byte("two"),})
+	if err != nil {
+		panic(err.Error())
+	}
+}
+```
+
+
 
