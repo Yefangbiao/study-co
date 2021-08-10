@@ -87,3 +87,66 @@ kafka使用第二种,可能存在问题，消费者一直询问
 8. **Leader**： 每个分区多个副本的“主”，生产者发送数据的对象，以及消费者消费数据的对象都是 leader。
 9. **Follower**： 每个分区多个副本中的“从”，实时从 leader 中同步数据，保持和 leader 数据的同步。 leader 发生故障时，某个 Follower 会成为新的 leader。
 10. **Zookeeper**：存储Kafka集群信息  
+
+
+
+## 06_Kafka安装-启动-关闭
+
+### 1.安装
+
+略
+
+### 2.启动
+
++ 启动前可以修改`conf`文件夹下的配置
++ 使用`kafka-server-start config/server.properties`启动，注意，这是mac的启动。推荐简单的启动方法，使用homebrew安装，然后使用`brew services start kafka`可以快速启动
++ 如果想要后台运行可以加上`-daemon`
+
+### 3.关闭
+
+直接使用`kafka-server-stop`进行关闭
+
+
+
+## 07_Kafka Topic增删查
+
+### 1.查看Topic
+
+`kafka-topics --list --zookeeper localhost:2181`
+
+### 2.创建Topic
+
+`kafka-topics --create --zookeeper localhost:2181 --topic first --partitions 1 --replication-factor 1`
+
+- --topic 定义 topic 名,这里建立了一个名字叫`first`的topic
+- --replication-factor 定义副本数
+- --partitions 定义分区数
+
+### 3.删除Topic
+
+`kafka-topics --delete --zookeeper localhost:2181 --topic first`
+
+### 4.查看详细信息
+
+`kafka-topics --topic test --describe --zookeeper localhost:2181`
+
+
+
+### 其他问题：副本数不能超过机器数
+
+
+
+## 07_生产者消费者发送消息
+
+### 1.消费者消费消息
+
+`kafka-console-consumer --bootstrap-server localhost:9092 --topic test`
+
++ --bootstrap-server:指定了连接的kafka集群
+
+### 2.生产者发送消息
+
+`kafka-console-producer --broker-list localhost:9092 --topic test`
+
++ --broker-list:指定连接的Kafka集群地址
+
