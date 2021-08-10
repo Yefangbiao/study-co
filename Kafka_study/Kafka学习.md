@@ -197,26 +197,25 @@ https://github.com/segmentio/kafka-go   To Create Topic部分
 + --bootstrap-server:指定了连接的kafka集群
 
 ```go
-func main() {
-	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", "my-topic", 0)
-	if err != nil {
-		log.Fatal("failed to dial leader:", err)
-	}
-	
-	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+r := kafka.NewReader(kafka.ReaderConfig{
+    Brokers:   []string{"localhost:9092"},
+    Topic:     "topic-A",
+    Partition: 0,
+    MinBytes:  10e3, // 10KB
+    MaxBytes:  10e6, // 10MB
+})
+r.SetOffset(42)
 
-	// 使用ReadMessage来接收消息
-	for {
-		m, err := conn.ReadMessage(1000)
-		if err != nil {
-			break
-		}
-		fmt.Println(string(m.Value))
-	}
-	
-	if err := conn.Close(); err != nil {
-		log.Fatal("failed to close connection:", err)
-	}
+for {
+    m, err := r.ReadMessage(context.Background())
+    if err != nil {
+        break
+    }
+    fmt.Printf("message at offset %d: %s = %s\n", m.Offset, string(m.Key), string(m.Value))
+}
+
+if err := r.Close(); err != nil {
+    log.Fatal("failed to close reader:", err)
 }
 ```
 
