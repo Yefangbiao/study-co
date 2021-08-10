@@ -227,6 +227,8 @@ if err := r.Close(); err != nil {
 
 + --broker-list:指定连接的Kafka集群地址
 
+**方法一**
+
 ```go
 func main() {
 	// 建立连接
@@ -247,7 +249,37 @@ func main() {
 }
 ```
 
+**方法二(推荐)**
 
+```go
+w := &kafka.Writer{
+		Addr:     kafka.TCP("localhost:9092"),
+		Topic:   "my-topic",
+		Balancer: &kafka.LeastBytes{},
+	}
+
+	err := w.WriteMessages(context.Background(),
+		kafka.Message{
+			Key:   []byte("Key-A"),
+			Value: []byte("Hello World!"),
+		},
+		kafka.Message{
+			Key:   []byte("Key-B"),
+			Value: []byte("Hi Everybody!"),
+		},
+		kafka.Message{
+			Key:   []byte("Key-C"),
+			Value: []byte("Is Anyone there!"),
+		},
+	)
+	if err != nil {
+		log.Fatal("failed to write messages:", err)
+	}
+
+	if err := w.Close(); err != nil {
+		log.Fatal("failed to close writer:", err)
+	}
+```
 
 
 
