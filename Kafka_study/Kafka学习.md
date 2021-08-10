@@ -8,11 +8,11 @@
 
 Kafka 是一个**分布式**的基于**发布/订阅模式**的**消息队列**（Message Queue）
 
-### 发布/订阅
+### 1.发布/订阅
 
 在软件架构中，**发布-订阅**是一种消息范式，消息的发送者（称为发布者）不会将消息直接发送给特定的接收者（称为订阅者）。而是将发布的消息分为不同的类别，无需了解哪些订阅者（如果有的话）可能存在。同样的，订阅者可以表达对一个或多个类别的兴趣，只接收感兴趣的消息，无需了解哪些发布者（如果有的话）存在。
 
-### 消息队列
+### 2.消息队列
 当不需要立即获得结果，但是并发量又需要进行控制的时候，差不多就是需要使用消息队列的时候。
 
 消息队列主要解决了应用耦合、异步处理、流量削锋等问题。
@@ -186,7 +186,7 @@ https://github.com/segmentio/kafka-go   To Create Topic部分
 
 
 
-### 其他问题：副本数不能超过机器数
+### 5.其他问题：副本数不能超过机器数
 
 ## 07_生产者消费者发送消息
 
@@ -248,4 +248,87 @@ func main() {
 ```
 
 
+
+
+
+
+
+## 待定
+
+### 1.Kafka创建消费者集群(默认分区数=消费者数目)
+
+```go
+// make a new reader that consumes from topic-A
+r := kafka.NewReader(kafka.ReaderConfig{
+    Brokers:   []string{"localhost:9092"},
+    GroupID:   "consumer-group-id",
+    Topic:     "topic-A",
+    MinBytes:  10e3, // 10KB
+    MaxBytes:  10e6, // 10MB
+})
+
+for {
+    m, err := r.ReadMessage(context.Background())
+    if err != nil {
+        break
+    }
+    fmt.Printf("message at topic/partition/offset %v/%v/%v: %s = %s\n", m.Topic, m.Partition, m.Offset, string(m.Key), string(m.Value))
+}
+
+if err := r.Close(); err != nil {
+    log.Fatal("failed to close reader:", err)
+}
+```
+
+There are a number of limitations when using consumer groups:
+
+- `(*Reader).SetOffset` will return an error when GroupID is set
+- `(*Reader).Offset` will always return `-1` when GroupID is set
+- `(*Reader).Lag` will always return `-1` when GroupID is set
+- `(*Reader).ReadLag` will return an error when GroupID is set
+- `(*Reader).Stats` will return a partition of `-1` when GroupID is set
+
+
+
+查看消费者集群
+
+`kafka-consumer-groups --bootstrap-server localhost:9092 --list`
+
+查看具体消费者信息
+
+`kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group {{group_name}}`
+
+
+
+### 2. 代码显示提交
+
+Instead of calling `ReadMessage`, call `FetchMessage` followed by `CommitMessages`.
+
+```go
+ctx := context.Background()
+for {
+    m, err := r.FetchMessage(ctx)
+    if err != nil {
+        break
+    }
+    fmt.Printf("message at topic/partition/offset %v/%v/%v: %s = %s\n", m.Topic, m.Partition, m.Offset, string(m.Key), string(m.Value))
+    if err := r.CommitMessages(ctx, m); err != nil {
+        log.Fatal("failed to commit messages:", err)
+    }
+}
+```
+
+### 3.在Config中设置`commitInterval`定期提交偏移量
+
+```go
+// make a new reader that consumes from topic-A
+r := kafka.NewReader(kafka.ReaderConfig{
+    Brokers:        []string{"localhost:9092"},
+    GroupID:        "consumer-group-id",
+    Topic:          "topic-A",
+    MinBytes:       10e3, // 10KB
+    MaxBytes:       10e6, // 10MB
+    CommitInterval: time.Second, // flushes commits to Kafka every second
+})
+```
 
