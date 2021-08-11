@@ -548,7 +548,56 @@ kafka-console-producer --broker-list localhost:9092 --topic test
 
 
 
+## 23_Kafka 高效读写数据
 
+### 1.顺序写磁盘
+
+Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是一直追加到文件末端，为顺序写。 官网有数据表明，同样的磁盘，顺序写能到 600M/s，而随机写只有 100K/s。这与磁盘的机械机构有关，顺序写之所以快，是因为其**省去了大量磁头寻址的时间**。
+
+### 2.零拷贝/零复制
+
+![img](Kafka学习.assets/14.png)
+
+- NIC network interface controller 网络接口控制器
+
+### 3.Zookeeper在Kafka中的作用
+
+Kafka 集群中有一个 broker 会被选举为 Controller，负责管理集群 broker 的上下线，所有 topic 的分区副本分配和 leader 选举等工作。
+
+Controller 的管理工作都是依赖于 Zookeeper 的。
+
+以下为 partition 的 leader 选举过程：
+
+![Leader选举流程](Kafka学习.assets/15-8687826.png)
+
+## 24_Kafka Range分区
+
+略
+
+
+
+## 25_Kafka事物
+
+### 1.Producer 事务
+
+为了实现跨分区跨会话的事务，需要引入一个全局唯一的 Transaction ID，并将 Producer 获得的PID 和Transaction ID 绑定。这样当Producer 重启后就可以通过正在进行的 TransactionID 获得原来的 PID。
+
+为了管理 Transaction， Kafka 引入了一个新的组件 Transaction Coordinator。 Producer 就是通过和 Transaction Coordinator 交互获得 Transaction ID 对应的任务状态。 Transaction Coordinator 还负责将事务所有写入 Kafka 的一个内部 Topic，这样即使整个服务重启，由于事务状态得到保存，进行中的事务状态可以得到恢复，从而继续进行。
+
+### 2.Consumer事务
+
+上述事务机制主要是从 Producer 方面考虑，对于 Consumer 而言，事务的保证就会相对较弱，尤其时无法保证 Commit 的信息被精确消费。这是由于 Consumer 可以通过 offset 访问任意信息，而且不同的 Segment File 生命周期不同，同一事务的消息可能会出现重启后被删除的情况。
+
+
+
+## 26_Kafka_API生产者流程
+
+Kafka 的 Producer 发送消息采用的是**异步发送**的方式。在消息发送的过程中，涉及到了**两个线程——main 线程和 Sender 线程**，以及**一个线程共享变量——RecordAccumulator**。 main 线程将消息发送给 RecordAccumulator， Sender 线程不断从 RecordAccumulator 中拉取消息发送到 Kafka broker。
+
+![img](Kafka学习.assets/19-8689434.png)
+
+- **batch.size**： 只有数据积累到 batch.size 之后， sender 才会发送数据。
+- **linger.ms**： 如果数据迟迟未达到 batch.size， sender 等待 linger.time 之后就会发送数据。
 
 
 
