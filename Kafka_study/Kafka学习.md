@@ -204,6 +204,8 @@ r := kafka.NewReader(kafka.ReaderConfig{
     MinBytes:  10e3, // 10KB
     MaxBytes:  10e6, // 10MB
 })
+// 设置-1 可以从最新的消息消费
+// 设置-2 从第一条消息消费
 r.SetOffset(42)
 
 for {
