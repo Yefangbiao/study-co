@@ -2,7 +2,11 @@
 
 ## 01_大纲部分
 
-[Kafka学习笔记](https://my.oschina.net/jallenkwong/blog/4449224)
+[官方网站]( [Apache Kafka](https://kafka.apache.org/documentation/))
+
+[学习视频](https://www.bilibili.com/video/BV1a4411B7V9?p=1)
+
+// TODO:Kafka深入,看书<<深入理解Kakfa 核心设计与实践原理>>
 
 ## 02_Kafka入门
 
