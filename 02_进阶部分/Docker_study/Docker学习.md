@@ -163,3 +163,107 @@ Docker 利用容器（Container）独立运行的一个或一组应用。容器�
 
 
 
+### 3.2 环境说明
+
+**查看自己的内核**
+
+`uname -r` 命令用于打印当前系统相关信息（内核版本号、硬件架构、主机名称和操作系统类型
+
+等）。
+
+```shell
+[root@kuangshen ~]# uname -r 
+3.10.0-1062.12.1.el7.x86_64
+```
+
+**查看版本信息**
+
+```shell
+[root@yfb ~]# cat /etc/os-release
+NAME="CentOS Linux"
+VERSION="7 (Core)"
+ID="centos"
+ID_LIKE="rhel fedora"
+VERSION_ID="7"
+PRETTY_NAME="CentOS Linux 7 (Core)"
+ANSI_COLOR="0;31"
+CPE_NAME="cpe:/o:centos:centos:7"
+HOME_URL="https://www.centos.org/"
+BUG_REPORT_URL="https://bugs.centos.org/"
+
+CENTOS_MANTISBT_PROJECT="CentOS-7"
+CENTOS_MANTISBT_PROJECT_VERSION="7"
+REDHAT_SUPPORT_PRODUCT="centos"
+REDHAT_SUPPORT_PRODUCT_VERSION="7"
+
+```
+
+**安装**
+
+1、官网安装参考手册：https://docs.docker.com/engine/install/centos/
+
+2、确定你是CentOS7及以上版本，我们已经做过了 
+
+3、yum安装gcc相关环境（需要确保 虚拟机可以上外网 ）
+
+4、卸载旧版本
+
+```shell
+yum remove docker \ docker-client \ docker-client-latest \ docker-common \ docker-latest \ docker-latest-logrotate \ docker-logrotate \ docker-engine
+```
+
+5、安装需要的软件包
+
+```shell
+yum install -y yum-utils
+```
+
+6、设置镜像仓库
+
+```shell
+# 错误 yum-config-manager --add-repo 
+https://download.docker.com/linux/centos/docker-ce.repo 
+## 报错 [Errno 14] 
+curl#35 - TCP connection reset by peer [Errno 12] 
+curl#35 - Timeout
+
+# 正确推荐使用国内的 
+yum-config-manager --add-repo http://mirrors.aliyun.com/dockerce/linux/centos/docker-ce.repo
+```
+
+7、更新yum软件包索引
+
+```
+yum makecache fast
+```
+
+8、安装 Docker CE
+
+```
+yum install docker-ce docker-ce-cli containerd.io
+```
+9、启动 Docker
+
+```
+systemctl start docker
+```
+10、测试命令
+
+```shell
+docker version
+
+docker run hello-world
+
+docker images
+```
+
+11、卸载
+
+```shell
+systemctl stop docker
+
+yum -y remove docker-ce docker-ce-cli containerd.io
+
+rm -rf /var/lib/docker
+```
+
