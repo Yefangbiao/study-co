@@ -589,3 +589,21 @@ version Show the docker version information # 查看 docker 版本号
 wait Block until a container stops, then print its exit code # 截取容 器停止时的退出状态值
 ```
 
+**可视化**
+
+Portainer（先用这个）
+
+```shell
+docker run -d -p 8088:9000 \ --restart=always -v /var/run/docker.sock:/var/run/docker.sock -privileged=true portainer/portainer
+```
+
+Rancher（CI/CD再用这个）
+
+```shell
+#安装rancher-server 
+docker run --name rancher-server -p 8000:8080 -v 
+/etc/localtime:/etc/localtime:ro -d rancher/server 
+#安装agent 
+docker run --rm --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/rancher:/var/lib/rancher rancher/agent:v1.2.11 http://39.101.191.131:8000/v1/scripts/D3DBD43F263109BB881F:1577750400000:7M0y BzCw4XSxJklD7TpysYIpI
+```
+
