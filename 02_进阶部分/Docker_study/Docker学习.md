@@ -267,3 +267,325 @@ yum -y remove docker-ce docker-ce-cli containerd.io
 rm -rf /var/lib/docker
 ```
 
+### 3.3 运行hell-world
+
+1. 启动hello-world
+
+```shell
+docker run hello-world
+```
+
+![image-20210815100055468](Docker学习.assets/image-20210815100055468-8992856.png)
+
+### 3.4 底层原理
+
+**Docker怎么工作的**
+
+Docker是一个Client-Server结构的系统，Docker守护进程运行在主机上， 然后通过Socket连接从客户 端访问！
+
+守护进程从客户端接受命令并管理运行在主机上的容器。 容器，是一个运行时环境，就是我们 前面说到的集装箱。
+
+![image-20210815100612013](Docker学习.assets/image-20210815100612013-8993173.png)
+
+![image-20210815101040772](Docker学习.assets/image-20210815101040772-8993442.png)
+
+**为什么Docker比较 VM 快**
+
+1、docker有着比虚拟机更少的抽象层。由亍docker不需要Hypervisor实现硬件资源虚拟化,运行在 docker容器上的程序直接使用的都是实际物理机的硬件资源。因此在CPU、内存利用率上docker将会在 效率上有明显优势。
+
+2、docker利用的是宿主机的内核,而不需要Guest OS。因此,当新建一个容器时,docker不需要和虚拟机 一样重新加载一个操作系统内核。仍而避免引寻、加载操作系统内核返个比较费时费资源的过程,当新建 一个虚拟机时,虚拟机软件需要加载Guest OS,返个新建过程是分钟级别的。而docker由于直接利用宿主 机的操作系统,则省略了这个过程,因此新建一个docker容器只需要几秒钟。
+
+![image-20210815101331210](Docker学习.assets/image-20210815101331210-8993612.png)
+
+![image-20210815101341348](Docker学习.assets/image-20210815101341348-8993622.png)
+
+
+
+
+
+## 4.Docker常用命令
+
+### 4.1帮助命令
+
+```shell
+docker version # 显示 Docker 版本信息。
+docker info  # 显示 Docker 系统信息，包括镜像和容器数。
+docker --help   # 帮助
+```
+
+帮助文档地址：https://docs.docker.com/
+
+### 4.2 镜像命令
+
+**docker images**
+
+```shell
+# 列出本地主机上的镜像 [root@kuangshen ~]# docker images REPOSITORY TAG
+REPOSITORY    TAG       IMAGE ID       CREATED        SIZE
+hello-world   latest    d1165f221234   5 months ago   13.3kB
+
+# 解释 REPOSITORY TAG IMAGE ID CREATED SIZE
+
+镜像的仓库源 镜像的标签 镜像的ID 镜像创建时间 镜像大小
+
+# 同一个仓库源可以有多个 TAG，代表这个仓库源的不同版本，我们使用REPOSITORY：TAG 定义不同 的镜像，如果你不定义镜像的标签版本，docker将默认使用 lastest 镜像！
+
+# 可选项
+
+-a： 列出本地所有镜像
+
+-q： 只显示镜像id
+
+--digests： 显示镜像的摘要信息
+```
+
+**docker search**
+
+```shell
+# 搜索镜像 [root@kuangshen ~]# docker search mysql 
+NAME                              DESCRIPTION                                    STARS     OFFICIAL   AUTOMATED
+mysql                             MySQL is a widely used, open-source relation…   11269     [OK]
+
+# docker search 某个镜像的名称
+
+对应DockerHub仓库中的镜像
+
+# 可选项 
+--filter stars=50 ： 列出收藏数不小于指定值的镜像。
+```
+
+**docker pull**
+
+```shell
+# 下载镜像 [root@kuangshen ~]# docker pull mysql 
+Using default tag: latest # 不写tag，默认是latest 
+latest: Pulling from library/mysql 
+54fec2fa59d0: Already exists # 分层下载 
+bcc6c6145912: Already exists 
+951c3d959c9d: Already exists 
+05de4d0e206e: Already exists 
+319f0394ef42: Already exists 
+d9185034607b: Already exists 
+013a9c64dadc: Already exists 
+42f3f7d10903: Pull complete 
+c4a3851d9207: Pull complete
+82a1cc65c182: Pull complete 
+a0a6b01efa55: Pull complete 
+bca5ce71f9ea: Pull complete 
+Digest: sha256:61a2a33f4b8b4bc93b7b6b9e65e64044aaec594809f818aeffbff69a893d1944 #签名 
+Status: Downloaded newer image for mysql:latest 
+docker.io/library/mysql:latest # 真实位置
+
+# 指定版本下载 [root@kuangshen ~]# docker pull mysql:5.7 ....
+```
+
+**docker rmi**
+
+```shell
+# 删除镜像 
+docker rmi -f 镜像id  #删除单个
+docker rmi -f 镜像名:tag 镜像名:tag #删除多个
+docker rmi -f $(docker images -qa)	#删除全部
+```
+
+
+
+### 4.3 容器命令
+
+说明：有镜像才能创建容器，我们这里使用 centos 的镜像来测试，就是虚拟一个 centos ！
+
+```shell
+docker pull centos
+```
+
+**新建容器并启动**
+
+```shell
+# 命令 
+docker run [OPTIONS] IMAGE [COMMAND][ARG...]
+
+# 常用参数说明
+
+--name="Name" # 给容器指定一个名字
+-d  # 后台方式运行容器，并返回容器的id
+-i # 以交互模式运行容器，通过和 -t 一起使用
+-t    # 给容器重新分配一个终端，通常和 -i 一起使用
+-P   # 随机端口映射（大写）
+-p  # 指定端口映射（小结），一般可以有四种写法
+		ip:hostPort:containerPort
+		ip::containerPort
+		hostPort:containerPort (常用)
+		containerPort
+		
+		
+
+# 使用centos进行用交互模式启动容器，在容器内执行/bin/bash命令！
+[root@kuangshen ~]# docker run -it centos /bin/bash
+[root@kuangshen ~]exit  # 使用 exit 退出容器
+```
+
+**列出所有容器**
+
+```shell
+# 命令
+docker ps [OPTIONS]
+# 常用参数说明
+-a # 列出当前所有正在运行的容器 + 历史运行过的容器
+-l # 显示最近创建的容器
+-n=? # 显示最近n个创建的容器
+-q # 静默模式，只显示容器编号。
+```
+
+**删除容器**
+
+```shell
+docker rm 容器id
+docker rm -f $(docker ps -a -q) #删除所有容器
+docker ps -a -q|xargs docker rm #删除所有容器
+```
+
+**退出容器**
+
+```shell
+exit
+crtl+P+Q  #容器不停止退出
+```
+
+**启动停止的容器**
+
+```shell
+docker start (容器id or 容器名)  #启动容器
+docker restart (容器id or 容器名) #重启重启
+docker stop (容器id or 容器名) #停止容器
+docker kill (容器id or 容器名) # 强制停止容器
+```
+
+### 4.4 常用的其他命令
+
+**后台启动容器**
+
+```shell
+# 命令 
+docker run -d 容器名
+
+# 问题： 使用docker ps 查看，发现容器已经退出了！ 
+# 解释：Docker容器后台运行，就必须有一个前台进程，容器运行的命令如果不是那些一直挂起的命 令，就会自动退出。 
+# 比如，你运行了nginx服务，但是docker前台没有运行应用，这种情况下，容器启动后，会立即自 杀，因为他觉得没有程序了，所以最好的情况是，将你的应用使用前台进程的方式运行启动。
+```
+
+
+
+**查看日志**
+
+```shell
+# 命令 
+docker logs -f -t --tail 容器id
+# -t 显示时间戳 # -f 打印最新的日志 # --tail 数字 显示多少条！
+
+# 例子：我们启动 centos，并编写一段脚本来测试玩玩！最后查看日志
+# docker run -d centos /bin/sh -c "while true;do echo kuangshen;sleep 1;done"
+```
+
+**查看容器运行中的进程信息**
+
+```shell
+# 命令 
+docker top 容器id
+```
+
+**查看容器/镜像的元数据**
+
+```shell
+docker inspect 容器id
+```
+
+**进入正在运行的容器**
+
+```shell
+# 命令1
+docker exec -it 容器id bashShell
+
+# 命令2 
+docker attach 容器id
+
+# 区别 
+# exec 是在容器中打开新的终端，并且可以启动新的进程 
+# attach 直接进入容器启动命令的终端，不会启动新的进程
+```
+
+**从容器内拷贝文件到主机上**
+
+```shell
+# 命令 
+docker cp 容器id:容器内路径 目的主机路径
+```
+
+
+
+### 4.5小结
+
+![image-20210815115202256](Docker学习.assets/image-20210815115202256.png)
+
+```shell
+# 当前shell下连接指定运行镜像
+attach Attach to a running container attach 
+# 通过Dockerfile定制镜像
+bulid Build an image from a Dcokerfile
+# 提交当前容器作为新的镜像
+commit Create a new image from a container changes
+# 从容器中拷贝指定文件或目录到宿主机
+cp Copy files/folders from the containers filesystem to the host path create Create a new container
+# 创建一个容器，同run 但是不启动
+carete  Create a new container
+# 查看docker容器变化
+diff Inspect changes on a container's filesystem
+# 从docker服务获取容器实时时间
+events Get real time events from the server
+# 在已存在的容器上运行命令
+exec Run a command in an existing container
+# 导出容器的内容作为一个tar归档文件
+export Stream the contents of a container as a tar archive
+# 展示一个镜像形成历史
+history Show the history of an image
+# 列出系统当前镜像
+images List images
+# 从tar包的内容创建一个新的文件系统映像
+import Create a new filesystem image from the contents of a tarball
+# 显示系统相关信息
+info Display system-wide information
+# 查看容器详细信息
+inspect Return low-level information on a container
+# Kill指定docker容器
+kill Kill a running container
+# 从一个tar包加载一个镜像
+load Load an image from a tar archive
+# 注册或者登陆一个docker源服务器
+login Register or Login to the docker registry server
+# 从当前docker register注册退出
+logout Log out from a Docker registry server
+logs Fetch the logs of a container # 输出当前容器日志信息
+# 查看映射端口对应的容器内部源端口
+port Lookup the public-facing port which is NAT-ed to PRIVATE_PORT
+pause Pause all processes within a container # 暂停容器
+ps List containers # 列出容器列表
+# 从docker镜像源服务器拉取指定镜像或者库镜像
+pull Pull an image or a repository from the docker registry server
+# 推送指定镜像或者库镜像至docker源服务器
+push Push an image or a repository to the docker registry server
+restart Restart a running container # 重启运行的容器
+rm Remove one or more containers # 移除一个或者多个容器
+# 移除一个或多个镜像[无容器使用该 镜像才可删除，否则需删除相关容器才可继续或 -f 强制删除]
+rmi Remove one or more images
+run Run a command in a new container # 创建一个新的容器并运行一个命令
+save Save an image to a tar archive # 保存一个镜像为一个 tar 包[对应 load]
+search Search for an image on the Docker Hub # 在 docker hub 中搜 索镜像
+
+start Start a stopped containers # 启动容器 
+stop Stop a running containers # 停止容器 
+tag Tag an image into a repository # 给源中镜像打标签
+top Lookup the running processes of a container # 查看容器中运行的进程信 息
+unpause Unpause a paused container # 取消暂停容器 
+version Show the docker version information # 查看 docker 版本号
+wait Block until a container stops, then print its exit code # 截取容 器停止时的退出状态值
+```
+
