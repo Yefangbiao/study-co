@@ -886,3 +886,182 @@ docker run -it --name docker02 -volumes-from docker01 kuangshen/centos
 ```
 
 **容器之间配置信息的传递，数据卷的生命周期一直持续到没有容器使用它为止。 存储在本机的文件则会一直保留！**
+
+
+
+
+
+## 7.DockerFile
+
+大家想想，Nginx，tomcat，mysql 这些镜像都是哪里来的？官方能写，我们不能写吗？ 
+
+我们要研究自己如何做一个镜像，而且我们写的微服务项目以及springboot打包上云部署，Docker就是 最方便的。
+
+ 微服务打包成镜像，任何装了Docker的地方，都可以下载使用，极其的方便。
+
+ 流程：开发应用=>DockerFile=>打包为镜像=>上传到仓库（私有仓库，公有仓库）=> 下载镜像 => 启动 运行。 
+
+还可以方便移植！
+
+### 7.1什么是DockerFile
+
+dockerﬁle是用来构建Docker镜像的构建文件，是由一系列命令和参数构成的脚本。 
+
+构建步骤： 
+
+1、编写DockerFile文件 
+
+2、docker build 构建镜像 
+
+3、docker run
+
+地址：https://hub.docker.com/_/centos
+
+![image-20210817202155878](Docker学习.assets/image-20210817202155878-9202917.png)
+
+![image-20210817202204861](Docker学习.assets/image-20210817202204861.png)
+
+### 7.2 DockerFile构建过程
+
+**基础知识**
+
+1、每条保留字指令都必须为大写字母且后面要跟随至少一个参数 
+
+2、指令按照从上到下，顺序执行 
+
+3、# 表示注释 
+
+4、每条指令都会创建一个新的镜像层，并对镜像进行提交
+
+**流程**
+
+1、docker从基础镜像运行一个容器 
+
+2、执行一条指令并对容器做出修改 
+
+3、执行类似 docker commit 的操作提交一个新的镜像层 
+
+4、Docker再基于刚提交的镜像运行一个新容器 
+
+5、执行dockerﬁle中的下一条指令直到所有指令都执行完成！
+
+![image-20210817202735440](Docker学习.assets/image-20210817202735440-9203256.png)
+
+**说明**
+
+ 从应用软件的角度来看，DockerFile，docker镜像与docker容器分别代表软件的三个不同阶段。
+
++ DockerFile 是软件的原材料 （代码）
+
++ Docker 镜像则是软件的交付品 （.apk）
+
++ Docker 容器则是软件的运行状态 （客户下载安装执行） 
+
+DockerFile 面向开发，Docker镜像成为交付标准，Docker容器则涉及部署与运维，三者缺一不可！
+
+![image-20210817203043640](Docker学习.assets/image-20210817203043640-9203444.png)
+
+DockerFile：需要定义一个DockerFile，DockerFile定义了进程需要的一切东西。DockerFile涉及的内容 包括执行代码或者是文件、环境变量、依赖包、运行时环境、动态链接库、操作系统的发行版、服务进 程和内核进程（当引用进行需要和系统服务和内核进程打交道，这时需要考虑如何设计 namespace的权 限控制）等等。
+
+Docker镜像：在DockerFile 定义了一个文件之后，Docker build 时会产生一个Docker镜像，当运行 Docker 镜像时，会真正开始提供服务；
+
+Docker容器：容器是直接提供服务的。
+
+### 7.3 DockerFile的指令
+
+```shell
+FROM  # 基础镜像，当前镜像基于哪个
+MAINTAINER # 镜像维护者的姓名混合邮箱地址(弃用)
+LABEL  # 镜像维护者的姓名混合邮箱地址
+RUN #容器构建时需要运行的命令
+EXPOSE # 当前容器对外保留出的端口
+WORKDIR # 指定创建容器后，终端默认登录的工作目录
+ENV # 用来构建镜像过程中设置环境变量
+ADD # 将宿主机目录下的文件拷贝进镜像且ADD自动处理URL和解压tar压缩包
+COPY #类似ADD，拷贝文件和目录到镜像中
+VOLUME # 容器数据卷，用于数据保存和持久化工作
+CMD  # 一个容器启动时候要运行的命令，可以有多个CMD命令，只有最后一个生效
+ENTRYPOINT # 指定一个容器要指定的时候运行的命令，可以追加命令
+ONBUILD # 当构建一个被继承的DockerFile时运行命令，父镜像被子镜像继承后，父镜像的ONBULLD被触发
+```
+
+![image-20210817203742449](Docker学习.assets/image-20210817203742449-9203863.png)
+
+![image-20210817203750153](Docker学习.assets/image-20210817203750153.png)
+
+### 7.4 实战
+
+Docker Hub 中99% 的镜像都是通过在base镜像（Scratch）中安装和配置需要的软件构建出来的
+
+> 自定义一个centos
+
+1.编写DockerFile
+
+目的：使我们自己的镜像具备如下：登陆后的默认路径、vim编辑器、查看网络配置ifconﬁg支持
+
+准备编写DockerFlie文件
+
+```shell
+yfb@YeFangbiaodeMacBook-Pro dockerfile-test % cat dockerfile-centos 
+FROM centos
+MAINTAINER yfb<test>
+
+ENV MYPATH /usr/local
+WORKDIR $MYPATH
+
+RUN yum -y install vim
+RUN yum -y install net-tools
+
+EXPOSE 80
+
+CMD echo $MYPATH
+CMD echo "--end---"
+CMD /bin/bash
+
+```
+
+2.构建
+
+```shell
+docker build -f {{dockerfile-centos}} -t {{mycentos:0.1}} .
+docker build -f dockerfile地址 -t 新镜像名字:TAG .
+```
+
+3.运行
+
+docker run -it 新镜像名字:TAG
+
+4.列出镜像变更历史
+
+docker history 镜像名
+
+
+
+### 7.5 CMD和ENTRYPOINT区别
+
+CMD只有最后一个命令生效，自己写命令会被替换
+
+
+
+ENTRYPOINT
+
+### 7.6 发布镜像
+
+> DockerHub
+
+1.登录
+
+```shell
+docker login -u {{yourname}}
+```
+
+2.将镜像发布出去
+
+```shell
+docker push {{yourname}}/{{images name}}:{{tag}}
+```
+
+### 7.7 总结
+
+![image-20210817215512626](Docker学习.assets/image-20210817215512626.png)
+
