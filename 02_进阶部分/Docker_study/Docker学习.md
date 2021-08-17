@@ -717,3 +717,174 @@ docker exec -it d3efa3368429 bin/bash
 docker commit -a="yfb" -m="add file" d3efa3368429 centos2:1.0
 ```
 
+
+
+## 6.容器数据卷
+
+### 6.1什么是容器数据卷
+
+**docker的理念回顾：**
+
+将应用和运行的环境打包形成容器运行，运行可以伴随着容器，但是我们对于数据的要求，是希望能够 ==持久化的==
+
+就好比，你安装一个MySQL，结果你把容器删了，就相当于删库跑路了，这TM也太扯了吧！
+
+所以我们希望容器之间有可能可以共享数据，Docker容器产生的数据，如果不通过docker commit 生成 新的镜像，使得数据作为镜像的一部分保存下来，那么当容器删除后，数据自然也就没有了！这样是行 不通的！
+
+为了能保存数据在Docker中我们就可以使用卷！让数据挂载到我们本地！这样数据就不会因为容器删除 而丢失了！
+
+**作用：**
+
+卷就是目录或者文件，存在一个或者多个容器中，由docker挂载到容器，但不属于联合文件系统，因此 能够绕过 Union File System ， 提供一些用于持续存储或共享数据的特性：
+
+卷的设计目的就是数据的持久化，完全独立于容器的生存周期，因此Docker不会在容器删除时删除其挂 载的数据卷。
+
+**特点：**
+
+1、数据卷可在容器之间共享或重用数据 2、卷中的更改可以直接生效 3、数据卷中的更改不会包含在镜像的更新中 4、数据卷的生命周期一直持续到没有容器使用它为止 
+
+**所以：总结一句话： 就是容器的持久化，以及容器间的继承和数据共享！**
+
+### 6.2 使用数据卷
+
+> 方式一：容器中直接使用命令来添加
+
+```shell
+# 命令 
+docker run -it -v 宿主机绝对路径目录:容器内目录 镜像名
+```
+
+查看数据卷是否挂载成功
+
+`docker inspect 容器id`
+
+![image-20210816212136536](Docker学习.assets/image-20210816212136536-9120097.png)
+
+测试容器和宿主机之间数据共享：可以发现，在容器中，创建的会在宿主机中看到！
+
+![image-20210816212236809](Docker学习.assets/image-20210816212236809.png)
+
+测试容器停止退出后，主机修改数据是否会同步！
+
+1. 停止容器
+
+2. 在宿主机上修改文件，增加些内容
+
+3. 启动刚才停止的容器
+
+4. 然后查看对应的文件，发现数据依旧同步！ok
+
+### 6.3 Mysql实战
+
+```shell
+docker pull mysql:5.7
+
+# 3、启动容器 -e 环境变量！
+# 注意： mysql的数据应该不丢失！先体验下 -v 挂载卷！ 参考官方文档
+docker run -d -p 3310:3306 -v /home/mysql/conf:/etc/mysql/conf.d -v /home/mysql/data:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=123456 --name mysql01 mysql:5.7
+
+# 4、使用本地的sqlyog连接测试一下 3310
+
+# 5、查看本地的 /home/mysql 目录
+pwd
+
+
+```
+
+### 6.4 具名挂载和匿名挂载
+
+```shell
+# 匿名挂载 
+-v 容器内路径
+docker run -d -P --name nginx01 -v /etc/nginx nginx
+# 匿名挂载的缺点，就是不好维护，通常使用命令 docker volume维护
+docker volume ls
+
+# 具名挂载 
+-v 卷名:/容器内路径 
+docker run -d -P --name nginx02 -v nginxconfig:/etc/nginx nginx
+
+# 查看挂载的路径 
+docker volume inspect nginxconfig 
+[
+	{ 
+    "CreatedAt": "2020-05-13T17:23:00+08:00", 
+    "Driver": "local", 
+    "Labels": null,
+    "Mountpoint": "/var/lib/docker/volumes/nginxconfig/_data", 
+    "Name": "nginxconfig", 
+    "Options": null, 
+    "Scope": "local"
+	}
+]
+
+# 怎么判断挂载的是卷名而不是本机目录名？ 
+不是/开始就是卷名，是/开始就是目录名
+
+# 改变文件的读写权限 
+# ro: readonly 只能通过宿主机操作，容器不能操作
+# rw: readwrite 
+# 指定容器对我们挂载出来的内容的读写权限 
+docker run -d -P --name nginx02 -v nginxconfig:/etc/nginx:ro nginx docker run -d -P --name nginx02 -v nginxconfig:/etc/nginx:rw nginx
+```
+
+所有docker容器内的卷，没有指定目录下都是在`/var/lib/docker/volumes/xxxx/_data`
+
+
+
+> 通过Docker File 来添加（了解）
+
+DockerFile 是用来构建Docker镜像的构建文件，是由一些列命令和参数构成的脚本。 我们在这里，先体验下，后面我们会详细讲解 DockerFile ！
+
+```shell
+# 1、我们在宿主机 /home 目录下新建一个 docker-test-volume文件夹 [root@kuangshen home]# mkdir docker-test-volume
+
+# 说明：在编写DockerFile文件中使用 VOLUME 指令来给镜像添加一个或多个数据卷
+VOLUME["/dataVolumeContainer1","/dataVolumeContainer2","/dataVolumeContainer 3"] 
+# 出于可移植和分享的考虑，我们之前使用的 -v 主机目录:容器目录 这种方式不能够直接在 DockerFile中实现。 
+# 由于宿主机目录是依赖于特定宿主机的，并不能够保证在所有宿主机上都存在这样的特定目录.
+
+# 2、编写DockerFile文件 
+[root@kuangshen docker-test-volume]# pwd /home/docker-test-volume [root@kuangshen docker-test-volume]# vim dockerfile1 
+[root@kuangshen docker-test-volume]# cat dockerfile1 
+# volume test 
+FROM centos
+VOLUME ["/dataVolumeContainer1","/dataVolumeContainer2"] 
+CMD echo "-------end------" 
+CMD /bin/bash
+
+# 3、build后生成镜像，获得一个新镜像 kuangshen/centos
+docker build -f /home/docker-test-volume/dockerfile1 -t kuangshen/centos . # 注意最后有个.
+
+# 4、启动容器 
+[root@kuangshen docker-test-volume]# docker run -it 0e97e1891a3d /bin/bash # 启动容器
+
+# 5、我们在数据卷中新建一个文件 
+[root@f5824970eefc dataVolumeContainer1]# pwd /dataVolumeContainer1 [root@f5824970eefc dataVolumeContainer1]# touch container.txt [root@f5824970eefc dataVolumeContainer1]# ls -l total 0 -rw-r--r-- 1 root root 0 May 11 11:58 container.txt
+
+# 6、查看下这个容器的信息 
+[root@kuangshen ~]# docker inspect 0e97e1891a3d 
+# 查看输出的Volumes 
+"Volumes": {
+	"/dataVolumeContainer1": {},
+	"/dataVolumeContainer2": {} 
+	},
+
+# 7、这个卷在主机对应的默认位置
+```
+
+注意：如果访问出现了 cannot open directory: Permission denied 解决办法：在挂载目录后多加一个 --privileged=true参数即可
+
+### 6.5 数据卷容器
+
+命名的容器挂载数据卷，其他容器通过挂载这个（父容器）实现数据共享，挂载数据卷的容器，称之为 数据卷容器。
+
+我们使用上一步的镜像：kuangshen/centos 为模板，运行容器 docker01，docker02，docker03，他们都会具有容器卷
+
+**挂载到主机同一个目录下**
+
+```shell
+docker run -it --name docker02 -volumes-from docker01 kuangshen/centos
+```
+
+**容器之间配置信息的传递，数据卷的生命周期一直持续到没有容器使用它为止。 存储在本机的文件则会一直保留！**
