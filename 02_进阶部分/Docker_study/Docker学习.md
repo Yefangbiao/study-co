@@ -424,7 +424,7 @@ docker run [OPTIONS] IMAGE [COMMAND][ARG...]
 [root@kuangshen ~]exit  # 使用 exit 退出容器
 ```
 
-**列出所有容器**
+**列出所有运行时的容器**
 
 ```shell
 # 命令
@@ -619,9 +619,7 @@ docker run --rm --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /va
 
 > UnionFS(联合文件系统)
 
-UnionFS（联合文件系统）：Union文件系统（UnionFS）是一种分层、轻量级并且高性能的文件系统， 它支持对文件系统的修改作为一次提交来一层层的叠加，同时可以将不同目录挂载到同一个虚拟文件系 统下(unite several directories into a single virtual ﬁlesystem)。Union 文件系统是 Docker 镜像的基
-
-础。镜像可以通过分层来进行继承，基于基础镜像（没有父镜像），可以制作各种具体的应用镜像。
+UnionFS（联合文件系统）：Union文件系统（UnionFS）是一种分层、轻量级并且高性能的文件系统， 它支持对文件系统的修改作为一次提交来一层层的叠加，同时可以将不同目录挂载到同一个虚拟文件系 统下(unite several directories into a single virtual ﬁlesystem)。Union 文件系统是 Docker 镜像的基础。镜像可以通过分层来进行继承，基于基础镜像（没有父镜像），可以制作各种具体的应用镜像。
 
 特性：一次同时加载多个文件系统，但从外面看起来，只能看到一个文件系统，联合加载会把各层文件 系统叠加起来，这样最终的文件系统会包含所有底层的文件和目录
 
@@ -725,7 +723,7 @@ docker commit -a="yfb" -m="add file" d3efa3368429 centos2:1.0
 
 **docker的理念回顾：**
 
-将应用和运行的环境打包形成容器运行，运行可以伴随着容器，但是我们对于数据的要求，是希望能够 ==持久化的==
+将应用和运行的环境打包形成容器运行，运行可以伴随着容器，但是我们对于数据的要求，是希望能够 == 持久化的 ==
 
 就好比，你安装一个MySQL，结果你把容器删了，就相当于删库跑路了，这TM也太扯了吧！
 
