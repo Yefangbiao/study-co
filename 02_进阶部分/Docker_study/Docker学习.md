@@ -1162,3 +1162,191 @@ Docker使用Linux桥接，在宿主机虚拟一个Docker容器网桥(docker0)，
 Docker容器网络就很好的利用了Linux虚拟网络技术，在本地主机和容器内分别创建一个虚拟接口，并 让他们彼此联通（这样一对接口叫veth pair）；
 
 Docker中的网络接口默认都是虚拟的接口。虚拟接口的优势就是转发效率极高（因为Linux是在内核中 进行数据的复制来实现虚拟接口之间的数据转发，无需通过外部的网络设备交换），对于本地系统和容 器系统来说，虚拟接口跟一个正常的以太网卡相比并没有区别，只是他的速度快很多。
+
+
+
+### 8.2 --Link
+
+思考一个场景，我们编写一个微服务，数据库连接地址原来是使用ip的，如果ip变化就不行了，那我们 能不能使用服务名访问呢？
+
+jdbc:mysql://mysql:3306，这样的话哪怕mysql重启，我们也不需要修改配置了！docker提供了 --link 的操作！
+
+```shell
+# 我们使用tomcat02，直接通过容器名ping tomcat01，不使用ip
+
+[root@kuangshen ~]# docker exec -it tomcat02 ping tomcat01 ping: tomcat01: Name or service not known # 发现ping不通
+
+# 我们再启动一个tomcat03，但是启动的时候连接tomcat02
+docker run -d -P --name tomcat03 --link tomcat02 tomcat
+
+# 这个时候，我们就可以使用tomcat03 ping通tomcat02 了
+docker exec -it tomcat03 ping tomcat02
+
+# 再来测试，tomcat02 是否可以ping tomcat03 反向也ping不通
+```
+
+```shell
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+ff00::0	ip6-mcastprefix
+ff02::1	ip6-allnodes
+ff02::2	ip6-allrouters
+172.17.0.3	tomcat02 975c66136201  # tomcat2直接写在了这里
+172.17.0.4	38357f4ba3aa
+
+# 所以这里其实就是配置了一个 hosts 地址而已！ # 原因：--link的时候，直接把需要link的主机的域名和ip直接配置到了hosts文件中了。
+```
+
+--link早都过时了，我们不推荐使用！我们可以使用自定义网络的方式
+
+### 8.3 自定义网络
+
+> 基本命令查看
+
+```shell
+[root@yfb ~]# docker network --help
+
+Usage:  docker network COMMAND
+
+Manage networks
+
+Commands:
+  connect     Connect a container to a network
+  create      Create a network
+  disconnect  Disconnect a container from a network
+  inspect     Display detailed information on one or more networks
+  ls          List networks
+  prune       Remove all unused networks
+  rm          Remove one or more networks
+
+Run 'docker network COMMAND --help' for more information on a command.
+```
+
+**查看所有网络**
+
+```shell
+docker network ls
+```
+
+**所有网路模式**
+
+| 网络模式       | 配置                     | 说明                                                         |
+| -------------- | ------------------------ | ------------------------------------------------------------ |
+| bridge模 式    | --net=bridge             | 默认值，在Docker网桥docker0上为容器创建新的网络 栈           |
+| none模式       | --net=none               | 不配置网络，用户可以稍后进入容器，自行配置                   |
+| container 模式 | -- net=container:name/id | 容器和另外一个容器共享Network namespace。 kubernetes中的pod就是多个容器共享一个Network namespace。 |
+| host模式       | --net=host               | 容器和宿主机共享Network namespace                            |
+| 用户自定 义    | --net=自定义网络         | 用户自己使用network相关命令定义网络，创建容器的 时候可以指定为自己定义的网络 |
+
+接下来我们来创建容器，但是我们知道默认创建的容器都是docker0网卡的
+
+```shell
+# 默认我们不配置网络，也就相当于默认值 --net bridge 使用的docker0
+docker run -d -P --name tomcat01 --net bridge tomcat
+
+# docker0网络的特点
+
+1.它是默认的
+2.域名访问不通
+3.--link 域名通了，但是删了又不行
+```
+
+**我们可以让容器创建的时候使用自定义网络**
+
+```shell
+# 自定义创建的默认default "bridge"
+docker network create --dirver bridge --subnet 192.168.0.0/16 --gateway 192.168.0.1 mynet
+
+[root@yfb ~]# docker network ls
+NETWORK ID     NAME      DRIVER    SCOPE
+3c5474e5b2c6   bridge    bridge    local
+6581b3c4db17   host      host      local
+607e288383e9   mynet     bridge    local
+b0d97379d7fd   none      null      local
+
+# 查看自己创建的网络
+[root@yfb ~]# docker network inspect mynet
+[
+    {
+        "Name": "mynet",
+        "Id": "607e288383e9f76658f12baf7b2888590b48a4ac1643076605feda941f45aa2a",
+        "Created": "2021-08-18T21:39:21.376177704+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "192.168.0.0/16",
+                    "Gateway": "192.168.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {},
+        "Labels": {}
+    }
+]
+
+# 我们来启动两个容器测试，使用自己的 mynet！
+[root@yfb ~]# docker exec -it tomcat-net-01 ping tomcat-net-02
+PING tomcat-net-02 (192.168.0.3) 56(84) bytes of data.
+64 bytes from tomcat-net-02.mynet (192.168.0.3): icmp_seq=1 ttl=64 time=0.073 ms
+64 bytes from tomcat-net-02.mynet (192.168.0.3): icmp_seq=2 ttl=64 time=0.071 ms
+
+# 发现，我们自定义的网络docker都已经帮我们维护好了对应的关系
+# 所以我们平时都可以这样使用网络，不使用--link效果一样，所有东西实时维护好，直接域名 ping 通。
+
+# 查看docker network inspect
+"Containers": {
+            "17cd17f7b9d4935a08b5d51b776cafc43ab28426a6b813433b11595bf7f6b0f5": {
+                "Name": "tomcat-net-02",
+                "EndpointID": "ca21c3c718b3771c6ac198764d4d362e7c01b60a335ec9b122a34438959cc4f0",
+                "MacAddress": "02:42:c0:a8:00:03",
+                "IPv4Address": "192.168.0.3/16",
+                "IPv6Address": ""
+            },
+            "e28a5ed4fa73ea49fe15156a8cde45b75e181a063e8aab61fc6caf262e40ffce": {
+                "Name": "tomcat-net-01",
+                "EndpointID": "a7eecc370f0e0304e6911ff400dd4f70c5baac9ce3fc88836c4f80d75a8e6bfb",
+                "MacAddress": "02:42:c0:a8:00:02",
+                "IPv4Address": "192.168.0.2/16",
+                "IPv6Address": ""
+            }
+        },
+```
+
+### 8.4 网络连通
+
+![image-20210818214700755](Docker学习.assets/image-20210818214700755.png)
+
+docker0和自定义网络肯定不通，我们使用自定义网络的好处就是网络隔离：
+
+大家公司项目部署的业务都非常多，假设我们有一个商城，我们会有订单业务（操作不同数据），会有 订单业务购物车业务（操作不同缓存）。如果在一个网络下，有的程序猿的恶意代码就不能防止了，所 以我们就在部署的时候网络隔离，创建两个桥接网卡，比如订单业务（里面的数据库，redis，mq，全 部业务 都在order-net网络下）其他业务在其他网络。
+
+
+
+那关键的问题来了，如何让 tomcat-net-01 访问 tomcat1？
+
+```shell
+# 我们来查看下network帮助，发现一个命令 connect
+
+docker network connect [OPTIONS] NETWORK CONTAINER
+
+# 执行命令
+docker network connect mynet tomcat01
+
+# tomcat01 可以ping通了 
+[root@kuangshen ~]# docker exec -it tomcat01 ping tomcat-net-01
+```
+
