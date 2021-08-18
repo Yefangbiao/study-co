@@ -405,7 +405,6 @@ docker pull centos
 docker run [OPTIONS] IMAGE [COMMAND][ARG...]
 
 # 常用参数说明
-
 --name="Name" # 给容器指定一个名字
 -d  # 后台方式运行容器，并返回容器的id
 -i # 以交互模式运行容器，通过和 -t 一起使用
@@ -971,7 +970,7 @@ Docker容器：容器是直接提供服务的。
 
 ```shell
 FROM  # 基础镜像，当前镜像基于哪个
-MAINTAINER # 镜像维护者的姓名混合邮箱地址(弃用)
+# MAINTAINER # 镜像维护者的姓名混合邮箱地址(弃用)
 LABEL  # 镜像维护者的姓名混合邮箱地址
 RUN #容器构建时需要运行的命令
 EXPOSE # 当前容器对外保留出的端口
@@ -1004,7 +1003,7 @@ Docker Hub 中99% 的镜像都是通过在base镜像（Scratch）中安装和配
 ```shell
 yfb@YeFangbiaodeMacBook-Pro dockerfile-test % cat dockerfile-centos 
 FROM centos
-MAINTAINER yfb<test>
+LABEL yfb<test>
 
 ENV MYPATH /usr/local
 WORKDIR $MYPATH
@@ -1043,7 +1042,7 @@ CMD只有最后一个命令生效，自己写命令会被替换
 
 
 
-ENTRYPOINT
+ENTRYPOINT CMD的命令会被 docker run 的命令覆盖而ENTRYPOINT不会
 
 ### 7.6 发布镜像
 
@@ -1089,8 +1088,8 @@ docker push {{yourname}}/{{images name}}:{{tag}}
        valid_lft forever preferred_lft forever
 
 lo 127.0.0.1 # 本机回环地址 
-eth0 172.17.90.138 # 阿里云的私有IP 
-docker0 172.18.0.1 # docker网桥
+eth0 172.23.157.236 # 阿里云的私有IP 
+docker0 172.17.0.1 # docker网桥
 # 问题：Docker 是如何处理容器网络访问的？
 ```
 
