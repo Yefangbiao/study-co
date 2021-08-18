@@ -1065,3 +1065,101 @@ docker push {{yourname}}/{{images name}}:{{tag}}
 
 ![image-20210817215512626](Docker学习.assets/image-20210817215512626.png)
 
+## 8.Docker 网络讲解
+
+### 8.1 理解Docker0
+
+1.**查看本地ip**
+
+`ip addr`
+
+```shell
+[root@yfb ~]# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 00:16:3e:08:b6:07 brd ff:ff:ff:ff:ff:ff
+    inet 172.23.157.236/20 brd 172.23.159.255 scope global dynamic eth0
+       valid_lft 315021856sec preferred_lft 315021856sec
+3: docker0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:4a:9e:db:9c brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+
+lo 127.0.0.1 # 本机回环地址 
+eth0 172.17.90.138 # 阿里云的私有IP 
+docker0 172.18.0.1 # docker网桥
+# 问题：Docker 是如何处理容器网络访问的？
+```
+
+我们之前安装ES的时候，留过一个问题，就是安装Kibana的问题，Kibana得指定ES的地址！或者我们 实际场景中，我们开发了很多微服务项目，那些微服务项目都要连接数据库，需要指定数据库的url地 址，通过ip。但是我们用Docker管理的话，假设数据库出问题了，我们重新启动运行一个，这个时候数 据库的地址就会发生变化，docker会给每个容器都分配一个ip，且容器和容器之间是可以互相访问的。 我们可以测试下容器之间能不能ping通过：
+
+```shell
+# 启动tomcat01
+docker run -d -P --name tomcat01 tomcat
+# 查看tomcat01的ip地址，docker会给每个容器都分配一个ip！
+[root@yfb ~]# docker exec -it tomcat01 ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+10: eth0@if11: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:ac:11:00:02 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
+
+
+# 我们的linux服务器可以ping通容器内的tomcat
+```
+
+
+
+> 原理
+
+```shell
+1、每一个安装了Docker的linux主机都有一个docker0的虚拟网卡。这是个桥接网卡，使用了veth-pair 技术！
+# 我们再次查看主机的 ip addr
+[root@yfb ~]# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 00:16:3e:08:b6:07 brd ff:ff:ff:ff:ff:ff
+    inet 172.23.157.236/20 brd 172.23.159.255 scope global dynamic eth0
+       valid_lft 315021714sec preferred_lft 315021714sec
+3: docker0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:4a:9e:db:9c brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+11: veth425a4e0@if10: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP group default 
+    link/ether ae:48:76:53:d0:2a brd ff:ff:ff:ff:ff:ff link-netnsid 0
+
+# 发现：本来我们有三个网络，我们在启动了个tomcat容器之后，多了一个！的网络！
+```
+
+2、每启动一个容器，linux主机就会多了一个虚拟网卡。
+
+再启动一个tomcat02，看是否可以ping通tomcat01
+
+```shell
+docker exec -it tomcat02 ping 172.17.0.2
+```
+
+3.网络模型图
+
+![image-20210818085339275](Docker学习.assets/image-20210818085339275.png)
+
+结论：tomcat1和tomcat2共用一个路由器。是的，他们使用的一个，就是docker0。任何一个容器启动 默认都是docker0网络。 docker默认会给容器分配一个可用ip。
+
+> 小结
+
+Docker使用Linux桥接，在宿主机虚拟一个Docker容器网桥(docker0)，Docker启动一个容器时会根据 Docker网桥的网段分配给容器一个IP地址，称为Container-IP，同时Docker网桥是每个容器的默认网 关。因为在同一宿主机内的容器都接入同一个网桥，这样容器之间就能够通过容器的Container-IP直接 通信。
+
+![image-20210818085519630](Docker学习.assets/image-20210818085519630-9248120.png)
+
+Docker容器网络就很好的利用了Linux虚拟网络技术，在本地主机和容器内分别创建一个虚拟接口，并 让他们彼此联通（这样一对接口叫veth pair）；
+
+Docker中的网络接口默认都是虚拟的接口。虚拟接口的优势就是转发效率极高（因为Linux是在内核中 进行数据的复制来实现虚拟接口之间的数据转发，无需通过外部的网络设备交换），对于本地系统和容 器系统来说，虚拟接口跟一个正常的以太网卡相比并没有区别，只是他的速度快很多。
