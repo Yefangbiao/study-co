@@ -1350,3 +1350,32 @@ docker network connect mynet tomcat01
 [root@kuangshen ~]# docker exec -it tomcat01 ping tomcat-net-01
 ```
 
+## 9.Docker Compose
+
+### 9.1 Compose简介
+
+Docker
+
+DockerFile build run 手动操作，单个容器！
+
+微服务。100个微服务！依赖关系。 Docker Compose 来轻松高效的管理容器i。定义运行多个容器。
+
+> 官方介绍
+
+Compose is a tool for defining and running multi-container Docker applications. With Compose, you use a YAML file to configure your application’s services. Then, with a single command, you create and start all the services from your configuration. To learn more about all the features of Compose, see [the list of features](https://docs.docker.com/compose/#features).
+
+Compose works in all environments: production, staging, development, testing, as well as CI workflows. You can learn more about each case in [Common Use Cases](https://docs.docker.com/compose/#common-use-cases).
+
+Using Compose is basically a three-step process:
+
+1. Define your app’s environment with a `Dockerfile` so it can be reproduced anywhere.
+2. Define the services that make up your app in `docker-compose.yml` so they can be run together in an isolated environment.
+3. Run `docker compose up` and the [Docker compose command](https://docs.docker.com/compose/cli-command/) starts and runs your entire app. You can alternatively run `docker-compose up` using the docker-compose binary.
+
+### 9.2 安装
+
+https://docs.docker.com/compose/install/
+
+### 9.3 体验
+
+https://docs.docker.com/compose/gettingstarted/
