@@ -1379,3 +1379,127 @@ https://docs.docker.com/compose/install/
 ### 9.3 体验
 
 https://docs.docker.com/compose/gettingstarted/
+
+### 9.4 yaml规则
+
+```shell
+# 3层！
+version: '' # 版本
+services: # 服务
+	服务1: web 
+	# 服务配置 
+	images 
+	build
+  network 
+  .....
+	服务2: 
+	redis 
+	....
+	服务3: redis 
+# 其他配置 网络/卷、全局规则 
+volumes:
+networks:
+configs:
+```
+
+![image-20210819195557357](Docker学习.assets/image-20210819195557357.png)
+
+1、官网文档 
+
+https://docs.docker.com/compose/compose-file/compose-file-v3/#build
+
+
+
+**自己搭建项目**
+
+https://docs.docker.com/compose/compose-file/compose-file-v3/#volumes
+
+
+
+## 10.Docker Swarm
+
+### 10.1工作模式
+
+![image-20210819203546934](Docker学习.assets/image-20210819203546934.png)
+
+### 10.2 搭建集群
+
+![image-20210819203613076](Docker学习.assets/image-20210819203613076.png)
+
+![image-20210819203718958](Docker学习.assets/image-20210819203718958.png)
+
+![image-20210819203849553](Docker学习.assets/image-20210819203849553.png)
+
+初始化节点
+
+docker swarm init
+
+docker swarm join 加入 一个节点！
+
+```shell
+# 获取令牌 
+docker swarm join-token manager 
+docker swarm join-token worker
+```
+
+![image-20210819204312181](Docker学习.assets/image-20210819204312181.png)
+
+把后面的节点都搭建进去！
+
+
+
+**动态扩缩容**
+
+实现高可用
+
+### 10.3 概念总结
+
+**swarm** 集群的管理和编号。 docker可以初始化一个 swarm 集群，其他节点可以加入。（管理、工作者） 
+
+**Node** 就是一个docker节点。多个节点就组成了一个网络集群。（管理、工作者） 
+
+**Service** 任务，可以在管理节点或者工作节点来运行。核心。！用户访问！ 
+
+**Task** 容器内的命令，细节任务！
+
+![image-20210819210425013](Docker学习.assets/image-20210819210425013.png)
+
+
+
+> 服务副本与全局服务
+
+![image-20210819210603734](Docker学习.assets/image-20210819210603734.png)
+
+调整service以什么方式运行
+
+
+
+```shell
+--mode string 
+Service mode (replicated or global) (default "replicated")
+
+docker service create --mode replicated --name mytom tomcat:7 默认的
+
+docker service create --mode global --name haha alpine ping baidu.com 
+#场景？日志收集 
+每一个节点有自己的日志收集器，过滤。把所有日志最终再传给日志中心 服务监控，状态性能。
+```
+
+拓展：网络模式： "PublishMode": "ingress" Swarm:
+
+Overlay:
+
+ingress : 特殊的 Overlay 网络！ 负载均衡的功能！ IPVS VIP！
+
+虽然docker在4台机器上，实际网络是同一个！ ingress 网络 ，是一个特殊的 Overlay 网络
+
+### 10.4 Docker Stack
+
+
+
+### 10.5 Docker Secret
+
+
+
+### 10.6 Docker Conﬁg
+
