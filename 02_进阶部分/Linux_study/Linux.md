@@ -115,7 +115,193 @@ vm设置共享文件夹
 
 ## 4.实际操作篇
 
+### 4.1 Linux远程登录
 
+ssh:默认原生
+
+ftp:Forklift
+
+### 4.2 Vi和Vim编辑器
+
+Linux 系统会内置 vi 文本编辑器 
+
+Vim 具有程序编辑的能力，可以看做是 Vi 的增强版本，可以主动的以字体颜色辨别语法的正确性，方便程序设计。 代码补完、编译及错误跳转等方便编程的功能特别丰富，在程序员中被广泛使用。
+
+#### 4.2.1 Vi和Vim常用的三种模式
+
++ 正常模式
+  以 vim 打开一个档案就直接进入一般模式了(这是默认的模式)。在这个模式中， 你可以使用『上下左右』按键来 移动光标，你可以使用『删除字符』或『删除整行』来处理档案内容， 也可以使用『复制、粘贴』来处理你的文件数 据。
+
++ 插入模式
+
+  按下 i, I, o, O, a, A, r, R 等任何一个字母之后才会进入编辑模式, 一般来说按 i 即可.
+
++ 命令行模式
+
+  输入 esc 再输入：在这个模式当中， 可以提供你相关指令，完成读取、存盘、替换、离开 vim 、显 示行号等的动作则是在此模式中达成的！
+
+![img](Linux.assets/175824-20161123224659425-328736487-9622489.png)
+
+### 4.3 开机关机、用户登录和注销
+
+**关机&重启命令**
+
+1) shutdown -h now //立即关机
+
+2) shudown  -h -t 1 // 一分钟后关机 
+
+3) shutdown -r now //重启
+
+4) halt //关机，和上面一样
+
+5) reboot  //重启，现在
+
+6) sync // 把内存数据同步到磁盘
+
++ 不管是重启系统还是关闭系统，首先要运行 sync 命令，把内存中的数据写到磁盘中
+
++ 目前的 shutdown/reboot/halt 等命令均已经在关机前进行了 sync ， 老韩提醒: 小心驶得万年船
+
+**用户登录和注销**
+
+登录时尽量少用 root 帐号登录，因为它是系统管理员，最大的权限，避免操作失误。可以利用普通用户登录， 后再用`su - username`命令来切换身份.
+
+在命令下输入 即可退出`su - username`的命令
+
+### 4.4 Linux用户管理
+
+Linux 系统是一个多用户多任务的操作系统，任何一个要使用系统资源的用户，都必须首先向系统管理员申请一个 账号，然后以这个账号的身份进入系统
+
+#### 4.4.1 增删改查单个用户
+
+1. 添加用户`useradd`,默认用户家目录在`/home/milan`. 
+
+也可以通过`useradd -d {{目录}}` 指定目录
+
+2. 指定/修改密码
+
+`passwd {{用户名}}`
+
+3. 删除用户
+
+`userdel {{用户名}}`
+
+把家目录也一起删除:`userdel -r {{用户名}}`
+
+4. 查看用户信息
+
+`id {{用户名}}`
+
+5. 切换用户
+
+`su - {{username}}`
+
+从权限高的用户切换到权限低的用户，不需要输入密码，反之需要。
+
+6. 查看当前用户`whoami`
+
+#### 4.4.2 用户组
+
+系统可以对有共性/权限的多个用户进行统一的管理
+
+1. 新增组
+
+`groupadd {{组名}}`
+
+增加用户的时候到组`useradd -g {{组名}} {{用户名}}`
+
+2. 删除组
+
+`groupdel {{组名}}`
+
+3. 修改用户的组
+
+`usermod -g {{用户组}} {{用户名}}`
+
+**相关文件**
+
+1. /etc/passwd
+
+用户（user）的配置文件，记录用户的各种信息 
+
+每行的含义：用户名:口令:用户标识号:组标识号:注释性描述:主目录:登录 Shell
+
+2. /etc/shadow
+
+口令的配置文件 
+
+每行的含义：登录名:加密口令:最后一次修改时间:最小时间间隔:最大时间间隔:警告时间:不活动时间:失效时间:标志
+
+3. /etc/group
+
+组(group)的配置文件，记录 Linux 包含的组的信息
+
+每行含义：组名:口令:组标识号:组内用户列表
+
+### 4.5 Linux实用指令
+
+### 4.5.1运行级别
+
+运行级别说明： 
+
+0 ：关机 
+
+1 ：单用户【找回丢失密码】 
+
+2：多用户状态没有网络服务 
+
+3：多用户状态有网络服务 
+
+4：系统未使用保留给用户 
+
+5：图形界面 
+
+6：系统重启 
+
+常用运行级别是 3 和 5 ，也可以指定默认运行级别， 后面演示
+
+**可以使用 `init {{运行级别}}`切换运行级别**
+
+```shell
+cat /etc/inittab 
+# inittab is no longer used when using systemd.
+#
+# ADDING CONFIGURATION HERE WILL HAVE NO EFFECT ON YOUR SYSTEM.
+#
+# Ctrl-Alt-Delete is handled by /usr/lib/systemd/system/ctrl-alt-del.target
+#
+# systemd uses 'targets' instead of runlevels. By default, there are two main targets:
+#
+# multi-user.target: analogous to runlevel 3
+# graphical.target: analogous to runlevel 5
+#
+# To view current default target, run:
+# systemctl get-default
+#
+# To set a default target, run:
+# systemctl set-default TARGET.target
+#
+```
+
+`systemctl get-default`:查看当前运行级别
+
+`systemctl set-default TARGET.target`:设置默认运行级别
+
+#### 4.5.2 找回root密码
+
+**不同版本找回root密码方式不同**
+
+https://blog.csdn.net/weixin_40876986/article/details/89434656
+
+#### 4.5.3 帮助命令
+
+1. `man`获得帮助信息
+
+基本语法：`man [命令或配置文件]`（功能描述：获得帮助信息）
+
+2. `help`获得shell内置命令的帮助信息
+
+基本语法：`help {{命令}}` （功能描述：获得 shell 内置命令的帮助信息）
 
 ## 5.高级篇
 
