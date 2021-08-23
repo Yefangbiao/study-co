@@ -715,9 +715,189 @@ GET test1/_search
 
 ### 3.1 索引操作
 
+**创建一个索引**
+
+```go
+import (
+	"context"
+	"fmt"
+	"github.com/olivere/elastic/v7"
+	"time"
+)
+
+func main() {
+	// 创建client
+	client, err := elastic.NewClient(
+		elastic.SetURL("http://localhost:9200"),
+		elastic.SetSniff(false),
+		)
+	if err != nil {
+		// Handle error
+		fmt.Printf("连接失败: %v\n", err)
+	} else {
+		fmt.Println("连接成功")
+	}
+
+	// 执行ES请求需要提供一个上下文对象
+	ctx := context.Background()
+
+	// 首先检测下weibo索引是否存在
+	exists, err := client.IndexExists("weibo").Do(ctx)
+	if err != nil {
+		// Handle error
+		panic(err)
+	}
+	if !exists {
+		// weibo索引不存在，则创建一个
+		_, err := client.CreateIndex("weibo").BodyString(mapping).Do(ctx)
+		if err != nil {
+			// Handle error
+			panic(err)
+		}
+	}
+}
+
+const mapping = `
+{
+  "mappings": {
+    "properties": {
+      "user": {
+        "type": "keyword"
+      },
+      "message": {
+        "type": "text"
+      },
+      "image": {
+        "type": "keyword"
+      },
+      "created": {
+        "type": "date"
+      },
+      "tags": {
+        "type": "keyword"
+      },
+      "location": {
+        "type": "geo_point"
+      },
+      "suggest_field": {
+        "type": "completion"
+      }
+    }
+  }
+}`
+```
+
+**删除一个索引**
+
+```go
+// 删除weibo索引
+		ok, err := client.DeleteIndex("weibo").Do(ctx)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(ok)
+```
+
 
 
 ### 3.2 文档操作
 
+**结构体**
 
+```go
+type Weibo struct {
+   User     string                `json:"user"`               // 用户
+   Message  string                `json:"message"`            // 微博内容
+   Retweets int                   `json:"retweets"`           // 转发数
+   Image    string                `json:"image,omitempty"`    // 图片
+   Created  time.Time             `json:"created,omitempty"`  // 创建时间
+   Tags     []string              `json:"tags,omitempty"`     // 标签
+   Location string                `json:"location,omitempty"` //位置
+   Suggest  *elastic.SuggestField `json:"suggest_field,omitempty"`
+}
+```
+
+**插入一条数据**
+
+```go
+// 插入一条数据
+	msg1 := Weibo{
+		User:     "name",
+		Message:  "肖战最帅",
+		Retweets: 0,
+	}
+	put1, err := client.Index().Index("weibo").Id("1").BodyJson(msg1).Do(ctx)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Indexed tweet %s to index %s, type %s\n", put1.Id, put1.Index, put1.Type)
+```
+
+**查询一条数据**
+
+```go
+// 查询一条数据
+rsp, err := client.Get().Index("weibo").Id("1").Do(ctx)
+if err != nil {
+   panic(err)
+}
+```
+
+**有条件查询**
+
+```go
+// Search with a term query
+	termQuery := elastic.NewTermQuery("user", "olivere")
+	searchResult, err := client.Search().
+		Index("twitter").   // search in index "twitter"
+		Query(termQuery).   // specify the query
+		Sort("user", true). // sort by "user" field, ascending
+		From(0).Size(10).   // take documents 0-9
+		Pretty(true).       // pretty print request and response JSON
+		Do(ctx)             // execute
+	if err != nil {
+		// Handle error
+		panic(err)
+	}
+```
+
+**删除一条数据**
+
+```go
+// 根据id删除一条数据
+_, err := client.Delete().
+		Index("weibo").
+		Id("1").
+		Do(ctx)
+if err != nil {
+	// Handle error
+	panic(err)
+}
+```
+
+
+
+
+
+
+
+**其他**
+
+```go
+// Flush to make sure the documents got written.
+	_, err = client.Flush().Index("twitter").Do(ctx)
+	if err != nil {
+		panic(err)
+	}
+```
+
+参考文档:https://www.tizi365.com/archives/850.html
+
+官方网址:https://pkg.go.dev/github.com/olivere/elastic
+
+参考网址:https://olivere.github.io/elastic/
+
+
+
+## 4. ES存储/搜索
 
