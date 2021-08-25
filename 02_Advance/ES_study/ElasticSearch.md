@@ -901,3 +901,73 @@ if err != nil {
 
 ## 4. ES存储/搜索
 
+
+
+## 其他
+
+### 匹配多个条件查询
+
+```http
+GET ott_arch_ctnt_wide-v1/_search
+{
+  "query": {
+    "query_string": {
+      "default_field": "tag",
+      "query": "tag:(*周星驰* OR *吴孟达*)",
+      "default_operator":"and"
+    }
+  }
+}
+```
+
+
+
+### 使用olivere-queryString查询
+
+```go
+queryString := elastic.NewQueryStringQuery(qString).DefaultField("mid").DefaultOperator("and")
+
+	searchResult, err := d.esClient.client.Search().
+		Index(d.esClient.indexName).
+		Query(queryString).
+		Sort("statichotscore", false).
+		Timeout(d.esClient.timeout).
+		From(0).Size(d.esClient.tagRecallNum).
+		Do(ctx) // execute
+```
+
+### 使用olivere-multiSearch查询
+
+```go
+// 1.构建组合条件
+	searches := []*olivere.SearchRequest{}
+	// 每一个MultiTag组合构成一个查询条件
+	for _, tags := range req.MultiTagWhitelist.MultiTags {
+		query := elastic.NewBoolQuery()
+		for _, tag := range tags.Tags {
+			term := olivere.NewTermQuery("tagnameset", tag)
+			query.Must(term)
+		}
+		searches = append(searches, olivere.NewSearchRequest().
+			Index(d.esClient.indexName).
+			From(0).From(d.esClient.multiTagRecallNum).
+			Sort("statichotscore", false).
+			Timeout(d.esClient.timeout).
+			Query(query))
+	}
+	// 2.查询数据
+	searchResult, err := d.esClient.client.MultiSearch().
+		Add(searches...).
+		Do(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "dao.GetResultsFromESByTag: can not search by multiTags")
+	}
+	if len(searchResult.Responses) != len(req.MultiTags) {
+		return nil, errors.Wrapf(err, "GetResultsFromESByTag: invalid es multi-search response, should len: %d, actual len: %d",
+			len(req.MultiTags), len(searchResult.Responses))
+	}
+```
+
+### proto风格要求
+
+https://git.bilibili.co/bapis/bapis/-/blob/master/style.md
