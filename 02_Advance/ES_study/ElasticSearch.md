@@ -968,6 +968,429 @@ queryString := elastic.NewQueryStringQuery(qString).DefaultField("mid").DefaultO
 	}
 ```
 
+### 多种条件查询
+
+```go
+// GetResultsFromESByTag 根据频道分区的tag白名单返回top Num
+// error 抛回到上层处理
+func (d *dao) GetResultsFromESByTag(ctx context.Context, req model.ChannelESRequest) (model.ArchLists, error) {
+	if len(req.TagWhitelist.Tags) <= 0 {
+		return nil, nil
+	}
+
+	lists := model.ArchLists{}
+	if d.esClient.client == nil {
+		return nil, errors.New("GetResultsFromESByTag: no esClient")
+	}
+
+	// 1.构建Tag White List查询条件
+	args := ToInterfaceSlice(req.TagWhitelist.Tags)
+	tagTermsWhiteQuery := elastic.NewTermsQuery(d.esClient.queryFieldTag, args...)
+	// 2.构建Tag Blank List查询条件
+	query := d.getBlankQueryFromRequest(req)
+
+	// 3.构建最终查询条件
+	query.Must(tagTermsWhiteQuery)
+
+	searchResult, err := d.esClient.client.Search().
+		Index(d.esClient.indexName).
+		Query(query).
+		Sort(d.esClient.sortField, false).
+		Timeout(d.esClient.timeout).
+		From(0).Size(d.esClient.tagRecallNum).
+		Do(ctx) // execute
+
+	if err != nil {
+		// Handle error
+		return nil, errors.Wrap(err, "dao.GetResultsFromESByTag: can not search by tags")
+	}
+
+	// 解析格式加入到最终输出
+	err = lists.Parse(searchResult)
+	if err != nil {
+		return nil, errors.Wrap(err, "dao.GetResultsFromESByTag")
+	}
+
+	return lists, nil
+}
+
+// GetResultsFromESByUpMid 根据频道分区的upMid白名单返回top Num
+// error 抛回到上层处理
+func (d *dao) GetResultsFromESByUpMid(ctx context.Context, req model.ChannelESRequest) (model.ArchLists, error) {
+	if len(req.UpMidWhitelist.Ups) <= 0 {
+		return nil, nil
+	}
+
+	lists := model.ArchLists{}
+	if d.esClient.client == nil {
+		return nil, errors.New("GetResultsFromESByUpMid: no esClient")
+	}
+
+	// 1.构建Tag White List查询条件
+	args := ToInterfaceSlice(req.UpMidWhitelist.Ups)
+	UpTermsWhiteQuery := elastic.NewTermsQuery(d.esClient.queryFieldUp, args...)
+	// 2.构建Tag Blank List查询条件
+	query := d.getBlankQueryFromRequest(req)
+
+	// 3.构建最终查询条件
+	query.Must(UpTermsWhiteQuery)
+
+	searchResult, err := d.esClient.client.Search().
+		Index(d.esClient.indexName).
+		Query(query).
+		Sort(d.esClient.sortField, false).
+		Timeout(d.esClient.timeout).
+		From(0).Size(d.esClient.tagRecallNum).
+		Do(ctx) // execute
+
+	if err != nil {
+		// Handle error
+		return nil, errors.Wrap(err, "dao.GetResultsFromESByUpMid: can not search by tags")
+	}
+
+	// 加入到最终输出
+	err = lists.Parse(searchResult)
+	if err != nil {
+		return nil, errors.Wrap(err, "dao.GetResultsFromESByTag")
+	}
+
+	return lists, nil
+}
+
+// GetResultsFromESByMultiTag 根据频道分区多个tag组合限制的条件查询返回top Num
+// error 抛回到上层处理
+func (d *dao) GetResultsFromESByMultiTag(ctx context.Context, req model.ChannelESRequest) (model.ArchLists, error) {
+	if len(req.MultiTagWhitelist.MultiTags) <= 0 {
+		return nil, nil
+	}
+
+	lists := model.ArchLists{}
+	if d.esClient.client == nil {
+		return nil, errors.New("dao.GetResultsFromESByMultiTag: no esClient")
+	}
+
+	// 构建Tag Blank List查询条件
+	blankLists := d.getBlankQueryFromRequest(req)
+	// 1.构建组合条件
+	// 每一个MultiTag组合构成一个查询条件
+	for _, tags := range req.MultiTagWhitelist.MultiTags {
+		query := blankLists
+		//query := elastic.NewBoolQuery()
+		for _, tag := range tags.Tags {
+			term := olivere.NewTermQuery(d.esClient.queryFieldTag, tag)
+			query.Must(term)
+		}
+		// 查询数据
+		searchResult, err := d.esClient.client.Search().
+			Index(d.esClient.indexName).
+			Query(query).
+			Sort(d.esClient.sortField, false).
+			Timeout(d.esClient.timeout).
+			From(0).Size(d.esClient.tagRecallNum).
+			Do(ctx)
+		if err != nil {
+			return nil, errors.Wrapf(err, "dao.GetResultsFromESByMultiTag: can not search by multiTags:%v", tags.Tags)
+		}
+		// 加入到最终输出
+		err = lists.Parse(searchResult)
+		if err != nil {
+			return nil, errors.Wrap(err, "dao.GetResultsFromESByMultiTa")
+		}
+	}
+
+	return lists, nil
+}
+
+func (d *dao) getBlankQueryFromRequest(req model.ChannelESRequest) *elastic.BoolQuery {
+	// mid 黑名单
+	upBlankTerms := elastic.NewTermsQuery(d.esClient.queryFieldUp, ToInterfaceSlice(req.UpMidBlankList.Ups)...)
+	upBool := elastic.NewBoolQuery().Should(upBlankTerms)
+	// tag 黑名单
+	tagBlankTerms := elastic.NewTermsQuery(d.esClient.queryFieldTag, ToInterfaceSlice(req.TagBlankList.Tags)...)
+
+	// mid和tag的黑名单合集
+	boolQuery := elastic.NewBoolQuery().MustNot(tagBlankTerms, upBool)
+	return boolQuery
+}
+
+// ToInterfaceSlice 转换[]string->[]interface{}
+func ToInterfaceSlice(slice interface{}) []interface{} {
+	s := reflect.ValueOf(slice)
+	if s.Kind() != reflect.Slice {
+		panic("InterfaceSlice() given a non-slice type")
+	}
+
+	ret := make([]interface{}, s.Len())
+
+	for i := 0; i < s.Len(); i++ {
+		ret[i] = s.Index(i).Interface()
+	}
+
+	return ret
+}
+
+
+
+```
+
+### 查询多重语句
+
+```
+# 查询tag
+GET ott_arch_ctnt_wide/_search
+{
+  "query": {
+     "bool": {
+      "must_not": [
+        {
+          "terms": {
+            "tagnameset": [
+            ]
+          }
+        }
+      ]
+      , "must": [
+        {
+          "terms": {
+            "tagnameset": [
+              "周星驰",
+              "吴孟达"
+            ]
+          }
+        }
+      ]
+    }
+  }
+  , "sort": [
+    {
+      "statichotscore": {
+        "order": "desc"
+      }
+    }
+  ]
+  , "from": 0
+  , "size": 20
+}
+
+# 查询mid
+GET ott_arch_ctnt_wide/_search
+{
+  "query": {
+    "query_string": {
+      "default_field": "mid",
+      "query": "28712292 OR 3923505",
+      "default_operator":"and"
+    }
+  }
+  , "sort": [
+    {
+      "statichotscore": {
+        "order": "desc"
+      }
+    }
+  ]
+  , "from": 0
+  , "size": 20
+}
+
+# 查询mid
+GET ott_arch_ctnt_wide/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "terms": {
+            "mid": [
+              "29658682",
+              "238316459"
+            ]
+          }
+        }
+      ]
+    }
+  }
+  , "sort": [
+    {
+      "statichotscore": {
+        "order": "desc"
+      }
+    }
+  ]
+  , "from": 0
+  , "size": 20
+}
+
+# 
+# 查询multi_search
+GET ott_arch_ctnt_wide/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "tagnameset": {
+              "value": "香港电影"
+            }
+          }
+        },{
+          "term": {
+            "tagnameset": {
+              "value": "搞笑"
+            }
+          }
+        }
+      ]
+      , "must_not": [
+        {
+          "terms": {
+            "tagnameset": [
+              "手书"
+            ]
+          }
+        },
+        {
+          "bool": {
+            "should": [
+              {
+                "terms": {
+                  "mid": [
+                    "445321157"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+  , "sort": [
+    {
+      "statichotscore": {
+        "order": "desc"
+      }
+    }
+  ]
+  , "from": 0
+  , "size": 20
+}
+
+# 查询tag
+GET ott_arch_ctnt_wide/_search
+{
+  "query": {
+    "query_string": {
+      "default_field": "tagnameset",
+      "query": "tagnameset:(周星驰 OR 吴孟达 OR 无厘头)",
+      "default_operator":"and"
+    }
+  , "sort": [
+    {
+      "statichotscore": {
+        "order": "desc"
+      }
+    }
+  ]
+  , "from": 0
+  , "size": 20
+}
+}
+
+
+
+# 加上黑名单查询tag
+GET ott_arch_ctnt_wide/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "terms": {
+            "tagnameset": [
+              "周星驰",
+              "吴孟达",
+              "无厘头"
+            ]
+          }
+        }
+      ]
+      , "must_not": [
+        {
+          "terms": {
+            "tagnameset": [
+              "手书"
+            ]
+          }
+        },
+        {
+          "bool": {
+            "should": [
+              {
+                "terms": {
+                  "mid": [
+                    "238316459"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+  , "sort": [
+    {
+      "statichotscore": {
+        "order": "desc"
+      }
+    }
+  ]
+}
+
+
+# 查询tag
+GET ott_arch_ctnt_wide/_search
+{
+  "query": {
+     "bool": {
+      "must": [
+        {
+          "term": {
+            "tagnameset": {
+              "value": "周星驰"
+            }
+          }
+        }
+      ]
+    }
+  }
+  , "sort": [
+    {
+      "statichotscore": {
+        "order": "desc"
+      }
+    }
+  ]
+  , "from": 0
+  , "size": 20
+}
+```
+
+
+
+
+
+
+
 ### proto风格要求
 
 https://git.bilibili.co/bapis/bapis/-/blob/master/style.md
+
+
+
+
+
+
+
