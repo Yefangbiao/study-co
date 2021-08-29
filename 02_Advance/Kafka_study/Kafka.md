@@ -2,15 +2,25 @@
 
 ## 01_大纲部分
 
-[官方网站](https://kafka.apache.org/documentation/)
+1.[官方网站](https://kafka.apache.org/documentation/)
 
-[学习视频](https://www.bilibili.com/video/BV1a4411B7V9?p=1)
+2.[学习视频](https://www.bilibili.com/video/BV1a4411B7V9?p=1)
 
-// TODO:Kafka深入,看书<<深入理解Kakfa 核心设计与实践原理>>
+3.Kafka深入,看书<<深入理解Kakfa 核心设计与实践原理>> (doing)
+
+4.官方文档
 
 ## 02_Kafka入门
 
 Kafka 是一个**分布式**的基于**发布/订阅模式**的**消息队列**（Message Queue）
+
+Kafka是一个分布式流式处理平台，它以**高吞吐、可持久化、可水平扩展、支持流数据处理**等多种特性而被广泛使用。
+
+> Kafka扮演的三大角色
+
++ **消息系统**：Kafka和传统的消息系统（也称消息中间件）都具备系统解耦、冗余存储、流量削峰、缓冲、异步通信、扩展性、可恢复性等功能。Kafka也提供了大多数消息系统难以实现的消息顺序性保障以及回溯消费的功能。
++ **存储系统**：Kafka把消息持久化到磁盘，有效的降低了数据丢失的风险。得益于Kafka的消息持久化功能和多副本机制，我们可以把Kafka作为长期的数据存储系统使用（把数据保留策略设置为”永久“或者启用主题的日志压缩功能）。
++ **流式处理平台**：Kafka不仅为每个流式处理框架提供了可靠的数据来源，还提供了一个完整的流式处理类库，比如窗口、连接、变换和聚合等各类操作。
 
 ### 1.发布/订阅
 
@@ -37,6 +47,10 @@ Kafka 是一个**分布式**的基于**发布/订阅模式**的**消息队列**�
    - 在访问量剧增的情况下，应用仍然需要继续发挥作用，但是这样的突发流量并不常见。如果为以能处理这类峰值访问为标准来投入资源随时待命无疑是巨大的浪费。使用消息队列能够使关键组件顶住突发的访问压力，而不会因为突发的超负荷的请求而完全崩溃。
 5. **异步通信**
    - 很多时候，用户不想也不需要立即处理消息。消息队列提供了异步处理机制，允许用户把一个消息放入队列，但并不立即处理它。想向队列中放入多少消息就放多少，然后在需要的时候再去处理它们。
+6. **可扩展性**
+   + kafka集群支持热扩展
+7. **冗余存储**
+   + Kafka可以通过设置`replication`副本数来冗余存储
 
 
 
@@ -73,24 +87,43 @@ kafka使用第二种,可能存在问题，消费者一直询问
 ![img](Kafka学习.assets/04-8514638.png)
 
 1. **Producer** ： 消息生产者，就是向 Kafka生产数据；
-
 2. **Consumer** ： 消息消费者，向 Kafka broker 取消息的客户端；
-
 3. **Consumer Group （CG）**： 消费者组，由多个 consumer 组成。 消费者组内每个消费者负责消费不同分区的数据，一个分区只能由一个组内消费者消费；消费者组之间互不影响。 所有的消费者都属于某个消费者组，即消费者组是逻辑上的一个订阅者。**消费者存储具体的消费位置**
 
    + **一个消费者可以消费多个分区的数据，反过来不行**
 
    + **消费者小于等于分区，消费者和分区的分区相等比较好**
-
 4. **Broker** ：服务代理结点 一台 Kafka 服务器就是一个 broker。一个集群由多个 broker 组成。一个 broker可以容纳多个 topic。
-
 5. **Topic** ： 主题，可以理解为一个队列， 生产者和消费者面向的都是一个 topic；
-
 6. **Partition**： 分区，为了实现扩展性，一个非常大的 topic 可以分布到多个 broker（即服务器）上，一个 topic 可以分为多个 partition，每个 partition 是一个有序的队列；
-7. **Replica**： 副本（Replication），为保证集群中的某个节点发生故障时， 该节点上的 partition 数据不丢失，且 Kafka仍然能够继续工作， Kafka 提供了副本机制，一个 topic 的每个分区都有若干个副本，一个 leader 和若干个 follower。
-8. **Leader**： 每个分区多个副本的“主”，生产者发送数据的对象，以及消费者消费数据的对象都是 leader。
-9. **Follower**： 每个分区多个副本中的“从”，实时从 leader 中同步数据，保持和 leader 数据的同步。 leader 发生故障时，某个 Follower 会成为新的 leader。
-10. **Zookeeper**：存储Kafka集群信息  
+
+分区中的所有副本称为**AR（Assigned Rewplicas）**。所有与leader副本保持一定程度同步的副本称为**ISR（In-Sync Replicas）**(包括leader)。消息先发送到leader副本然后发送到follower副本。与leader滞后过多的副本称为**OSR（Out-of-Sync Replicas）**。**AR=ISR+OSR**
+
+leader副本负责维护ISR。当有follower落后时从ISR移除。如果有OSR有follower”“追上”“则加入ISR。
+
++ HW:high watermark 高水位。标志了一个offset，消费者只能拉取到这个offset以及之前的消息。
++ LEO:Log End Offset：当前日志文件中下一个待写入的offset.LEO相当于当前日志最后一条offset加一
+
+![image-20210829232829670](Kafka.assets/image-20210829232829670.png)
+
+
+
+
+
+1. **Replica**： 副本（Replication），为保证集群中的某个节点发生故障时， 该节点上的 partition 数据不丢失，且 Kafka仍然能够继续工作， Kafka 提供了副本机制，一个 topic 的每个分区都有若干个副本，一个 leader 和若干个 follower。
+2. **Leader**： 每个分区多个副本的“主”，生产者发送数据的对象，以及消费者消费数据的对象都是 leader。
+3. **Follower**： 每个分区多个副本中的“从”，实时从 leader 中同步数据，保持和 leader 数据的同步。 leader 发生故障时，某个 Follower 会成为新的 leader。
+4. **Zookeeper**：存储Kafka集群信息 ,负责集群元数据管理、控制器的选举等操作
+
+**一些服务端Kafka重要参数**
+
++ zookeeper.connect:设置要连接的zookeeper集群地址。`zookeeper.connect=localhost1:2181,localhost2:2181`
++ *listeners*:指定broker监听客户端的链接地址列表,`listeners=PLAINTEXT://:9092`.如果有多个地址，使用`,`隔开.支持的协议有PLAINTEXT/SSSL/SASL_SSL等。
++ broker.id:   broker的唯一标志，kafka集群唯一
++ log.dir和log.dirs：配置Kafka日志文件根目录。log.dirs比log.dir优先级高，log.dirs可以设置多个目录，使用`,`分割
++ message.max.bytes: broker可以接受的最大值.
+
+
 
 
 
