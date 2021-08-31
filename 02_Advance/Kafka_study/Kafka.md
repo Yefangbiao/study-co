@@ -151,33 +151,6 @@ leader副本负责维护ISR。当有follower落后时从ISR移除。如果有OSR
 
 `kafka-topics --list --zookeeper localhost:2181`
 
-```go
-func main() {
-	conn, err := kafka.Dial("tcp", "localhost:9092")
-	if err != nil {
-		panic(err.Error())
-	}
-	defer conn.Close()
-
-	// 得到所有分区的相关信息
-	partitions, err := conn.ReadPartitions()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// 因为一个topic可能又多个分区,去重
-	m := map[string]struct{}{}
-	for _, p := range partitions {
-		m[p.Topic] = struct{}{}
-	}
-
-	// 列出所有topic
-	for k := range m {
-		fmt.Println(k)
-	}
-}
-```
-
 ### 2.创建Topic
 
 `kafka-topics --create --zookeeper localhost:2181 --topic first --partitions 1 --replication-factor 1`
@@ -188,26 +161,7 @@ func main() {
 
 ***默认auto.create.topics.enable='true'***
 
-```go
-import (
-	"context"
-	"github.com/segmentio/kafka-go"
-)
-
-func main() {
-	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", "my-topic", 0)
-	defer conn.Close()
-	if err != nil {
-		panic(err.Error())
-	}
-}
-```
-
 ***auto.create.topics.enable='true'***情况
-
-```text
-https://github.com/segmentio/kafka-go   To Create Topic部分
-```
 
 
 
@@ -233,94 +187,265 @@ https://github.com/segmentio/kafka-go   To Create Topic部分
 
 + --bootstrap-server:指定了连接的kafka集群
 
-```go
-r := kafka.NewReader(kafka.ReaderConfig{
-    Brokers:   []string{"localhost:9092"},
-    Topic:     "topic-A",
-    Partition: 0,
-    MinBytes:  10e3, // 10KB
-    MaxBytes:  10e6, // 10MB
-})
-// 设置-1 可以从最新的消息消费
-// 设置-2 从第一条消息消费
-r.SetOffset(42)
 
-for {
-    m, err := r.ReadMessage(context.Background())
-    if err != nil {
-        break
-    }
-    fmt.Printf("message at offset %d: %s = %s\n", m.Offset, string(m.Key), string(m.Value))
-}
-
-if err := r.Close(); err != nil {
-    log.Fatal("failed to close reader:", err)
-}
-```
 
 还有其他接收消息的方式
 
 ### 2.生产者发送消息
 
-`kafka-console-producer --broker-list localhost:9092 --topic test`
+`kafka-console-producer --broker-list localhost:9092 --topic topic-demo`
 
 + --broker-list:指定连接的Kafka集群地址
 
-**方法一**
-
 ```go
+import (
+	"fmt"
+	"github.com/Shopify/sarama"
+)
+
 func main() {
-	// 建立连接
-	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", "my-topic", 0)
-	defer conn.Close()
+	config := sarama.NewConfig()
+	// 等待服务器所有副本都保存成功后的响应
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	// 随机的分区类型：返回一个分区器，该分区器每次选择一个随机分区
+	config.Producer.Partitioner = sarama.NewRandomPartitioner
+	// 是否等待成功和失败后的响应
+	config.Producer.Return.Successes = true
+	// 使用给定代理地址和配置创建一个同步生产者
+	producer, err := sarama.NewSyncProducer([]string{"localhost:9092"}, config)
 	if err != nil {
-		log.Fatal("failed to dial leader:", err)
+		panic(err)
 	}
-	// 设置写超时
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	// 写入数据
-	conn.WriteMessages(
-		kafka.Message{Value: []byte("one")},
-		kafka.Message{Value: []byte("two"),})
-	if err != nil {
-		panic(err.Error())
+	defer producer.Close()
+
+	msg := &sarama.ProducerMessage{
+		Topic: "topic-demo",
+		Value: sarama.StringEncoder("Hello, Kafka!"),
 	}
+
+	partition, offset, err := producer.SendMessage(msg)
+	fmt.Printf("Partition = %d, offset=%d\n", partition, offset)
 }
 ```
 
-**方法二(推荐)**
+**ProducerMessage结构体**
 
 ```go
-w := &kafka.Writer{
-		Addr:     kafka.TCP("localhost:9092"),
-		Topic:   "my-topic",
-		Balancer: &kafka.LeastBytes{},
-	}
-
-	err := w.WriteMessages(context.Background(),
-		kafka.Message{
-			Key:   []byte("Key-A"),
-			Value: []byte("Hello World!"),
-		},
-		kafka.Message{
-			Key:   []byte("Key-B"),
-			Value: []byte("Hi Everybody!"),
-		},
-		kafka.Message{
-			Key:   []byte("Key-C"),
-			Value: []byte("Is Anyone there!"),
-		},
-	)
-	if err != nil {
-		log.Fatal("failed to write messages:", err)
-	}
-
-	if err := w.Close(); err != nil {
-		log.Fatal("failed to close writer:", err)
+sarama.ProducerMessage{
+		Topic:     "",	//主题
+		Key:       nil,	//键
+		Value:     nil,	//值
+		Headers:   nil,	//消息头部
+		Metadata:  nil,	//元数据
+		Offset:    0,		//偏移量
+		Partition: 0,		//指定分区
+		Timestamp: time.Time{},	//时间戳
 	}
 ```
 
++ headers:消息的头部，设定一些与应用相关的信息
++ key：可以用来计算分区号让消息发往指定的分区
++ timestamp是消息的时间戳，有`CreateTime`和`LogAppendTime`两种类型
 
+#### 2.1 自定义发送消息的编码
+
+在sarama中有一个接口类型，只要实现这个接口就可以自定义编码
+
+```go
+// Encoder is a simple interface for any type that can be encoded as an array of bytes
+// in order to be sent as the key or value of a Kafka message. Length() is provided as an
+// optimization, and must return the same as len() on the result of Encode().
+type Encoder interface {
+   Encode() ([]byte, error)
+   Length() int
+}
+// 在发送消息的时候使用  Value: sarama.StringEncoder("Hello, Kafka!"),
+```
+
+#### 2.2分区器
+
+如果消息中指定了`Partition`字段，就不需要分区器。否则就需要依赖分区器根据`Key`的值来计算分区。
+
+```go
+type Partitioner interface {
+	// Partition takes a message and partition count and chooses a partition
+	Partition(message *ProducerMessage, numPartitions int32) (int32, error)
+
+	// RequiresConsistency indicates to the user of the partitioner whether the
+	// mapping of key->partition is consistent or not. Specifically, if a
+	// partitioner requires consistency then it must be allowed to choose from all
+	// partitions (even ones known to be unavailable), and its choice must be
+	// respected by the caller. The obvious example is the HashPartitioner.
+	RequiresConsistency() bool
+}
+
+// 在配置config的时候使用  config.Producer.Partitioner=sarama.NewRoundRobinPartitioner
+```
+
+#### 2.3 生产者拦截器
+
+生产者拦截器可以在发送之前做一些准备工作，比如过滤不符合要求的消息，修改消息内容，也可以做一些定制化的需求，比如统计的工作.
+
+```go
+// ProducerInterceptor allows you to intercept (and possibly mutate) the records
+// received by the producer before they are published to the Kafka cluster.
+// https://cwiki.apache.org/confluence/display/KAFKA/KIP-42%3A+Add+Producer+and+Consumer+Interceptors#KIP42:AddProducerandConsumerInterceptors-Motivation
+type ProducerInterceptor interface {
+
+	// OnSend is called when the producer message is intercepted. Please avoid
+	// modifying the message until it's safe to do so, as this is _not_ a copy
+	// of the message.
+	OnSend(*ProducerMessage)
+}
+
+// 设置一个生产者拦截器。
+	interceptor := NewOTelInterceptor()
+// 可以发现，生产者拦截器可以设置多个
+	config.Producer.Interceptors = []sarama.ProducerInterceptor{interceptor}
+
+// 生产者拦截器OTelInterceptor,实现了ProducerInterceptor接口
+type OTelInterceptor struct {
+	num int //统计发送了多少个
+}
+
+func NewOTelInterceptor() *OTelInterceptor {
+	oi := OTelInterceptor{}
+	return &oi
+}
+
+func (oi *OTelInterceptor) OnSend(msg *sarama.ProducerMessage) {
+	oi.num++
+}
+
+func (oi *OTelInterceptor) GetNum() int {
+	return oi.num
+}
+```
+
+#### 2.4 原理分析
+
+生产者客户端的架构
+
+![image-20210830222315256](Kafka.assets/image-20210830222315256.png)
+
+整个生产者客户端由两个线程协调运行，这两个线程分别为`主线程`和 `Sender 线程` （发送线程）。 在主线程中由 KafkaProducer 创建消息， 然后通过可能的拦截器、序列化器和分区器的作 用之后缓存到`消息累加器`（ RecordAccumulator， 也称为消息收集器〉中。 Sender 线程负责从 RecordAccumulator 中 获取消息并将其发送到 Kafka 中 。
+
+`RecordAccumulator `主要用来缓存消息 以便 Sender 线程可以批量发送， 进而减少网络传输 的资源消耗以提升性能 。 RecordAccumulator 缓存的大 小可以通过生产者客户端参数 `buffer . memory` 配置， 默认值为 33554432B ，即 32MB 。 如果生产者发送消息的速度超过发 送到服务器的速度 ，则会导致生产者空间不足， 这个时候 KafkaProducer 的 send（）方法调用要么 被阻塞， 要么抛出异常， 这个取决于参数 `max . block . ms` 的配置， 此参数的默认值为 60000, 即 60 秒 。
+
+主线程中发送过来的消息都会被迫加到 RecordAccumulator 的某个双端队列（ Deque ）中， 在 RecordAccumulator 的内部为每个分区都维护了 一 个双端队列， 队列中的内容就是 `Producer Batch`， 即 `Deque<ProducerBatch＞`。 消息写入缓存时， 追加到双端队列的尾部： Sender读取消息时 ，从双端队列的头部读取。注意 ProducerBatch 不是 ProducerRecord, ProducerBatch 中可以包含一至多个 ProducerRecord。 通俗地说，` ProducerRecord `是生产者中创建的消息，而 `ProducerBatch` 是指一个消息批次 ， ProducerRecord 会被包含在 ProducerBatch 中，这样可以使宇 节的使用更加紧凑。与此同时，将较小的 ProducerRecord 拼凑成一个较大的 ProducerBatch，也 可以减少网络请求的次数以提升整体的吞吐量 。 ProducerBatch 和消息的具体格式有关.如果生产者客户端需要向很多分区发送消息， 则可以 将 buffer . memory 参数适当调大以增加整体的吞吐量 。
+
+消息在网络上都是以字节 Byte 的形式传输的，在发送之前需要创建一块内存区域来保 存对应的消息 。 不过频繁的创建和释放是比较耗费资源的，在 RecordAccumulator 的内部还有一个 BufferPool, 它主要用来实现 ByteBuffer 的复用，以实现缓存的高效利用 。不过 BufferPool 只针对特定大小 的 ByteBuffer 进行管理，而其他大小的 ByteBuffer 不会缓存进 BufferPool 中，这个特定的大小 由 `batch.size` 参数来指定，默认值为 16384B ，即 16KB 。 我们可以适当地调大 `batch.size`参数 以便多缓存一些消息。
+
+ProducerBatch 的大小和 batch . size 参数也有着密切的关系。当一条消息（ProducerRecord) 流入 RecordAccumulator 时，会先寻找与消息分区所对应的双端队列（如果没有则新建），再从 这个双端队列的尾部获取一个 ProducerBatch （如果没有则新建），查看 ProducerBatch 中是否 还可以写入这个 ProducerRecord ，如 果可以 则 写入，如果不可 以则 需要 创 建一个新 的 ProducerBatch。在新建 ProducerBatch 时评估这条消息的大小是否超过 batch . size 参数 的大 小，如果不超过，那么就以 batch . size 参数的大小来创建 ProducerBatch，这样在使用完这 段内存区域之后，可以通过 BufferPool 的管理来进行复用；如果超过，那么就以评估的大小来 创建 ProducerBatch， 这段内存区域不会被复用。
+
+Sender 从 RecordAccumulator 中 获取缓存的消息之后，会进一 步将原本＜分区， Deque< ProducerBatch＞＞的保存形式转变成＜Node, List< ProducerBatch＞的形式，其中 Node 表示 Kafka 集群的 broker 节点 。对于网络连接来说，生产者客户端是与具体 的 broker 节点建立的连接，也 就是 向具体的 broker 节点发送消息，而并不关心消息属于哪一个分区；
+
+在转换成＜Node, List<ProducerBatch＞＞的形式之后， Sender 还 会进一步封装成＜Node, Request>的形式，这样就可以将 Request 请求发往各个 Nod巳了， 这里的 Request 是指 Kafka 的 各种协议请求
+
+请求在从 Sender 线程发往 Kafka 之前还会保存到 InFlightRequests 中，InFlightRequests 保存对象的具体形式为 Map<Nodeld, Deque<R巳quest>＞，它的主要作用是缓存 了已经发出去但还
+
+没有收到响应的请求（ Nodeld 是一个 String 类型，表示节点的 id 编号）。与此同时， InFlightRequests 还提供了许多管理类 的方法，并且通过配置参数还可 以限制每个连接（也就是 客户端与 Node 之间的连接）最多缓存的请求数。这个配置参数为` max.  in . flight.requests . per. connection `，默认值为 5 ，即每个连接最多只能缓存 5 个未响应的请求，超过该数值 之后就不能再向这个连接发送更多的请求了，除非有缓存的请求收到了响应（ Response ）。通 过比较 Deque<Request>的 size 与这个参数的大小来判断对应的 Node 中是否己经堆积了很多未 响应的消息，如果真是如此，那么说明这个 Node 节点负载较大或网络连接有问题，再继续 向 其发送请求会增大请求超时的可能。
+
+#### 2.5 元数据的更新
+
+InFlightRequests 还可以获得 leastLoadedNode ，即所有 Node 中负载最小的 那一个 。这里的负载最小是通过每个 Node 在 InFlightRequests 中还未确认的请求决定的，未确认的请求越多则认为负载越大。 对于图 2-2 中的 InFlightRequests 来说，图中展示了 三个节点Node0、Node1 和 Node2 ，很明显 Nodel 的负载最小 。 也就是说， Node1 为当前的 leastLoadedNode。 选择 leastLoadedNode 发送请求可以使它能够尽快发出(发送元数据更新相关的请求)，避免因网络拥塞等异常而影响整体的进 度。 leastLoadedNode 的概念可以用于多个应用场合，比如元数据请求、消费者组播协议的交互。
+
+![image-20210830223527641](Kafka.assets/image-20210830223527641.png)
+
+
+
+我们前面发送的消息
+
+```go
+msg := &sarama.ProducerMessage{
+		Topic: "topic-demo",
+		Value: sarama.StringEncoder("Hello, Kafka!"),
+	}
+```
+
+我们只知道主题的名称，对于其他一些必要的信息却一无所知 。 KafkaProducer 要将此消息 追加到指定主题的某个分区所对应的 leader 副本之前，首先需要知道主题的分区数量，然后经 过计算得出（或者直接指定〉目标分区，之后 KafkaProducer 需要知道目标分区的 leader 副本所 在的 broker 节点的地址、端口等信息才能建立连接，最终才能将消息发送到 Kafka，在这一过程中 所需要 的信息都属于元数据信息。
+
+元数据是指 Kafka 集群的元数据，这些元数据具体记录了集群中有哪些主题，这些主题有 哪些分区，每个分区的 lead巳r 副本分配在哪个节点上， follower 副本分配在哪些节点上，哪些副 本在 AR、 ISR 等集合中，集群中有哪些节点，控制器节点又是哪一个等信息。
+
+当客户端中没有需要使用的元数据信息时，比如没有指定的主题信息，或者超 过`metadata . max.age.ms`
+
+时间没有更新元数据都会引起元数据的更新操作 。客户端参数`metadata . max.age.ms` 的默认值为 300000 ，即 5 分钟。元数据的更新操作是在客户端 内部进行的，对客户端的外部使用者不可见 。当需要更新元数据时，会先挑选出 leastLoadedNode, 然后 向这个 Node 发送 MetadataRequest 请求来获取具体的元数据信息。这个更新操作是由 Sender 线程发起 的， 在创建完 MetadataRequest 之后 同样会存入 InFlightRequests ，之后的步骤就和发送 消息时的类似 。 元数据虽然由 Sender 线程负责更新，但是主线程也需要读取这些信息，这里的 数据同步通过 synchronized 和 final 关键字来保障。
+
+
+
+#### 2.6 生产者的一些重要参数
+
+1. acks
+
+这个参数用来指定分区中必须要有多少个副本收到这条消息，之后生产者才会认为这条消 息是成功写入的。 acks 是生产者客户端中一个非常重要 的参数 ，它涉及消息的可靠性和吞吐 量之间的权衡 。 a cks 参数有 3 种类型的值（都是字符串类型）。
+
++ acks = 1 。默认值即为 1 。生产者发送消息之后，只要分区的 leader 副本成功写入消 息，那么它就会收到来自服务端的成功响应 。 如果消息无法写入 leader 副本，比如在 leader 副本崩溃、重新选举新的 leader 副本的过程中，那么生产者就会收到一个错误 的响应，为了避免消息丢失，生产者可以选择重发消息 。如果消息写入 leader 副本并 返回成功响应给生产者，且在被其他 follower 副本拉取之前 leader 副本崩溃，那么此 时消息还是会丢失，因为新选举的 leader 副本中并没有这条对应的消息 。 acks 设置为1，是消息可靠性和吞吐量之 间的折中方案。 
++ acks = 0 。生产者发送消 息之后不需要等待任何服务端的响应。如果在消息从发送到 写入 Kafka 的过程中出现某些异常，导致 Kafka 并没有收到这条消息，那么生产者也 无从得知，消息也就丢失了。在其他配置环境相同的情况下， acks 设置为 0 可以达 到最大的吞吐量。 
++ acks ＝ 一1或 acks =all 。生产者在消 息发送之后，需要等待 ISR 中的所有副本都成功 写入消息之后才能够收到来自服务端的成功响应。在其他配置环境相同的情况下， acks 设置为 -1 (all ）可以达到最强的可靠性。但这并不意味着消息就一定可靠，因 为 JSR 中可能只有 leader 副本，这样就退化成了 acks= 1 的情况。要获得更高的消息 可靠性需要配合 `min.insync.replicas` 等参数的联动，
+
+2. max.request.size
+
+这个参数用来限制生产者客户端能发送的消息的最大值，默认值为 1048576B ，即 10MB 。 一般情况下，这个默认值就可以满足大多数的应用场景了。笔者并不建议读者盲目地增大这个 参数的配置值，尤其是在对 Kafka 整体脉络没有足够把控的时候。因为这个参数还涉及一些其 他参数的联动，比如 broker 端的 `message.max . bytes` 参数，如果配置错误可能会引起一些不 必要的异常 。 比如将 broker 端的 `message . max.bytes` 参数配置为 10 ，而 `max.request . size` 参数配置为 20 ， 那么当我们发送一条大小为 15B 的消息时，生产者客户端就会报出异常
+
+3. retries 和 retry. backoff.ms
+
+retries 参数用来配置生产者重试的次数，默认值为 0，即在发生异常的时候不进行任何 重试动作。消息在从生产者发出到成功写入服务器之前可能发生一些临时性的异常， 比如网络 抖动、 leader 副本的选举等，这种异常往往是可以自行恢复的，生产者可以通过配置 retries 大于 0 的值，以此通过 内 部重试来恢复而不是一昧地将异常抛给生产者的应用程序。 如果重试 达到设定的次数 ，那么生产者就会放弃重试并返回异常。不过并不是所有的异常都是可以通过 重试来解决的，比如消息太大，超过 max . request . size 参数配置的值时，这种方式就不可 行了 。
+
+重试还和另一个参数 retry . backoff.ms 有关，这个参数的默认值为 100 ，
+
+它用来设定
+
+两次重试之间的时间间隔，避免无效的频繁重试。在配置 retries 和 retry . backoff.ms 之前，最好先估算一下可能的异常恢复时间，这样可以设定总的重试时间大于这个异常恢复时 间，以此来避免生产者过早地放弃重试。
+
+Kafka 可以保证同一个分区中的消息是有序的。如果生产者按照一定的顺序发送消息，那 么这些消息也会顺序地写入分区，进而消费者也可以按照同样的顺序消费它们。对于某些应用
+
+来说，顺序性非常重要 ，比如 MySQL 的 binlog 传输，如果出现错误就会造成非常严重的后果 。 如果将 acks 参数配置为非零值，并且 `max . in .flight.requests . per . connection` 参数 配置为大于 l 的值，那么就会出现错序的现象 ： 如果第一批次消息写入失败， 而第二批次消息 写入成功，那么生产者会重试发送第一批次的消息， 此时如果第一批次的消息写入成功，那么 这两个批次的消息就出现了错序 。 一般而言，在需要保证消息顺序的场合建议把参数 max.in.flight . requests . per.connection 配置为 1 ，而不是把 acks 配置为 0， 不过 这样也会影响整体的吞吐。
+
+4. compression.type
+
+这个参数用来指定消息的压缩方式，默认值为“ none ”，即默认情况下，消息不会被压缩。该参数还可以配置为“ gzip ”“ snappy ” 和
+
+“ lz4 ” 。对消息进行压缩可以极大地减少网络传输量 、降低网络 1/0 ，从而提高整体的性能 。消息压缩是一种使用时间换空间的优化方式，如果对 时延有一定的要求，则不推荐对消息进行压缩 。
+
+5. connections.max.idle.ms
+
+这个参数用来指定在多久之后关闭闲置的连接，默认值是 540000（ms），即九分钟
+
+6. linger.ms
+
+这个参数用来指定生产者发送 ProducerBatch 之前等待更多消息（ ProducerRecord ）加入 ProducerBatch 的时间，默认值为 0。生产者客户端会在 ProducerBatch 被填满或等待时间超过 linger . ms 值时发迭出去。增大这个参数的值会增加消息的延迟，但是同时能提升一定的吞 吐量。
+
+7. receive.buffer.bytes
+
+这个参数用来设置 Socket 接收消息缓冲区（ SO_RECBUF ）的大小，默认值为 32768 （ B， 即 32MB。如果设置为-1 ，则使用操作系统的默认值。如果 Producer 与 Kafka 处于不同的机房 ， 则可以适地调大这个参数值 。
+
+8. send.buffer. bytes
+
+这个参数用来设置 Socket 发送消息缓冲区 (SO_RECBUF ）的大小 ，默认值为 131072 (B) , 即 128KB 。与 receive . buffer . bytes 参数一样 ， 如果设置为 -1，则使用操作系统的默认值。
+
+9. request.timeout.ms
+
+这个参数用来配置 Producer 等待请求响应的最长时间，默认值为 3 0000 ( ms ）。请求超时 之后可以选择进行重试。注意这个参数需要 比 broker 端参数 `replica. lag . t ime . max . ms` 的 值要大 ，这样可 以减少因客户端重试而引起的消息重复的概率。
+
+10. 其他参数
+
+
+
+| 参数名称                              | 默认值                                                       | 参数释义                                                     |
+| :------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| bootstrap.servers                     | ""                                                           | 设定kafka连接的broker地址                                    |
+| key.serializer                        | ""                                                           | 消息key的序列化类                                            |
+| value.serializer                      | ""                                                           | 消息中value 对应的序列化类， 需要实现接口                    |
+| buffer.memory                         | 33554432 (32MB)                                              | 生产者客户端中用于缓存消息的缓冲区大小                       |
+| batch.size                            | 16384 (16KB)                                                 | 用于指定ProducerBatch可以复用内存区域的 大小                 |
+| client.Id                             | ""                                                           | 用来设定KafkaProducer对应的客户端id                          |
+| max.block.ms                          | 60000                                                        | 用 来控制KafkaProducer中send()方 法和 partitionsFor()方法的阻塞时间。 当生产者的发 送缓冲区已满， 或者没有可用的元数据时，这 些方法就会阻塞 |
+| partitioner.class                     | org.apache.kafka.clients.producer intemals.DefaultPartitLoner | 用来指定分区器， 需要实现 分区器接口                         |
+| enable.idempotence                    | false                                                        | 是否开启幕等性功能                                           |
+| max.m.flight.requests. per.connection | 5                                                            | 限制每个连接（也就是客户端与Node之间的 连接）最多缓存的请求数， |
+| metadata.max.age.ms                   | 300000 (5分钟）                                              | 如果在这个时间内元数据没有 强制更新， 详见22.2节更新的话会被 |
+| Interceptor.classes                   | “”                                                           | 用来指定拦截器                                               |
+| transactional.id                      | null                                                         | 设置事物id，必须唯一                                         |
 
 ## 09_Kafka数据日志分离
 
@@ -648,83 +773,3 @@ Kafka 的 Producer 发送消息采用的是**异步发送**的方式。在消息
 
 
 ## 待定
-
-### 1.Kafka创建消费者集群(默认分区数=消费者数目)
-
-```go
-// make a new reader that consumes from topic-A
-r := kafka.NewReader(kafka.ReaderConfig{
-    Brokers:   []string{"localhost:9092"},
-    GroupID:   "consumer-group-id",
-    Topic:     "topic-A",
-    MinBytes:  10e3, // 10KB
-    MaxBytes:  10e6, // 10MB
-})
-
-for {
-    m, err := r.ReadMessage(context.Background())
-    if err != nil {
-        break
-    }
-    fmt.Printf("message at topic/partition/offset %v/%v/%v: %s = %s\n", m.Topic, m.Partition, m.Offset, string(m.Key), string(m.Value))
-}
-
-if err := r.Close(); err != nil {
-    log.Fatal("failed to close reader:", err)
-}
-```
-
-There are a number of limitations when using consumer groups:
-
-- `(*Reader).SetOffset` will return an error when GroupID is set
-- `(*Reader).Offset` will always return `-1` when GroupID is set
-- `(*Reader).Lag` will always return `-1` when GroupID is set
-- `(*Reader).ReadLag` will return an error when GroupID is set
-- `(*Reader).Stats` will return a partition of `-1` when GroupID is set
-
-
-
-查看消费者集群
-
-`kafka-consumer-groups --bootstrap-server localhost:9092 --list`
-
-查看具体消费者信息
-
-`kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group {{group_name}}`
-
-
-
-### 2. 代码显示提交
-
-Instead of calling `ReadMessage`, call `FetchMessage` followed by `CommitMessages`.
-
-```go
-ctx := context.Background()
-for {
-    m, err := r.FetchMessage(ctx)
-    if err != nil {
-        break
-    }
-    fmt.Printf("message at topic/partition/offset %v/%v/%v: %s = %s\n", m.Topic, m.Partition, m.Offset, string(m.Key), string(m.Value))
-    if err := r.CommitMessages(ctx, m); err != nil {
-        log.Fatal("failed to commit messages:", err)
-    }
-}
-```
-
-### 3.在Config中设置`commitInterval`定期提交偏移量
-
-```go
-// make a new reader that consumes from topic-A
-r := kafka.NewReader(kafka.ReaderConfig{
-    Brokers:        []string{"localhost:9092"},
-    GroupID:        "consumer-group-id",
-    Topic:          "topic-A",
-    MinBytes:       10e3, // 10KB
-    MaxBytes:       10e6, // 10MB
-    CommitInterval: time.Second, // flushes commits to Kafka every second
-})
-```
-
-
-
