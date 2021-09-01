@@ -145,17 +145,29 @@ leader副本负责维护ISR。当有follower落后时从ISR移除。如果有OSR
 
 
 
-## 07_Kafka Topic增删查
+## 07_Kafka 主题和分区
 
-### 1.查看Topic
+主题作为消息的归类，可以再细分为一个或多个分区，分区 也可以看作对消息的二次归类。 分区的划分不仅为 Kafka 提供了可伸缩性、水平扩展的功能， 还通过多副本机制来为 Kafka 提供数据冗余以提高数据可靠性 。
 
-`kafka-topics --list --zookeeper localhost:2181`
+从 Kafka 的底层实现来说，主题和分区都是逻辑上的概念，分区可以有一至多个副本，每个副本对应一个日志文件 ，每个日志文件对应一至多个日志分段（ LogSegment ），每个日志分
 
-### 2.创建Topic
+段还可以细分为索引文件、日志存储文件和快照文件等 。
 
-`kafka-topics --create --zookeeper localhost:2181 --topic first --partitions 1 --replication-factor 1`
+### 1.主题的管理
 
-- --topic 定义 topic 名,这里建立了一个名字叫`first`的topic
+#### 1.1 创建主题
+
+主题的管理包括创建主题、 查看主题信息、修改主题和删除主题等操作。可以通过 Kafka 提供的 kafka-topics.sh 脚本来执行这些操作,核心代码只有一行
+
+![image-20210901215447899](Kafka.assets/image-20210901215447899.png)
+
+可以看到其实质上是调用了 kafka.admin.TopicCommand 类来执行主题管理的操作 。
+
+如果 broker 端配置参数 `auto .create.topics .enable` 设置为 true （默认值就是 true) , 那么当生产者向一个尚未创建的主题发送消息时，会自动创建一个分区数为 `num . partitions` （默认值为 1 ）、副本因子为 `default.replication.factor` （默认值为 1 ）的主题，当一个消费者开始从未知主题中读取消息时，或者当任意一个客户端向未知主题发送元 数据请求时，都会按照配置参数 num.partitions 和 default.replication .factor 的 值来创建一个相应的主题。
+
+`kafka-topics --create --zookeeper localhost:2181 --topic topic-demo --partitions 1 --replication-factor 1`
+
+- --topic 定义 topic 名,这里建立了一个名字叫`topic-demo`的topic
 - --replication-factor 定义副本数
 - --partitions 定义分区数
 
@@ -163,21 +175,215 @@ leader副本负责维护ISR。当有follower落后时从ISR移除。如果有OSR
 
 ***auto.create.topics.enable='true'***情况
 
+在执行完脚本之后，
+
+Kafka 会在 `log.dir` 或 `log.dirs` 参数所配置的目录下创建相应的主题分区
+
+主题、分区、副本和 Log （日志）的关系如图 4-1 所示， 主题和分区都是提供给上层用户 的抽象， 而在副本层面或更加确切地说是 Log 层面才有实际物理上的存在。 同一个分区中的多 个副本必须分布在不同的 broker 中，这样才能提供有效的数据冗余。
+
+![image-20210901213210962](Kafka.assets/image-20210901213210962.png)
+
+在 kafka-topics.sh 脚本中 对应的还有 `list` 、` describe` 、 `alter` 和 `delete` 这 4 个同级别的指令类型 ， 每个类型所需 要的参数也不尽相同。
+
+还可以通过 describe 指令类型来查看分区副本的分配细节，
+
+`kafka-topics --topic topic-demo --describe --zookeeper localhost:2181`
+
+![image-20210901213650176](Kafka.assets/image-20210901213650176.png)
+
+示例中的 Topic 和 Partition 分别表示主题名称和分区号 。 Partition 表示主 题中分区的个数 ， ReplicationFactor 表示副本因子 ， 而 Configs 表示创建或修改主题时 指定的参数配置 。 Leader 表示分区的 leader 副本所对应的 brokerld , Isr 表示分区的 ISR 集合， Replicas 表示分区的所有 的副本分配情况 ，即 AR 集合，其中 的数字都表示的是 brokerld.
+
+`kafka-topics.sh`脚 本中还提 供 了 一 个`replica - assignment` 参数来手动 指 定分区副本的分配方案。
+
+![image-20210901214105215](Kafka.assets/image-20210901214105215.png)
+
+这种方式根据分区号的数值大小按照从小到大的顺序进行排 列 ， 分区与分区之间用 逗号 “，” 隔开， 分区内多个副本用冒号“：”隔开。并且在使用 replica-assignment 参数创建主题时 不需要原本必备 的 partitions 和 replication - factor 这两个参数。
+
+![image-20210901214227171](Kafka.assets/image-20210901214227171.png)
+
+注意同一个分区内的副本不能有重复， 比如指定了 0 : 0 , 1 : 1 这种
+
+在创建主题时我们还可以通过 con fig 参数来设置所要创建主题的相关参数 ， 通过这个参 数可以覆盖原本的默认配置。在创建主题时可 以 同时设置多个参数
+
+`--config <String : namel=valuel> --config <String:name2=value2>`
+
+![image-20210901214400258](Kafka.assets/image-20210901214400258.png)
+
+我们再次通过 descr ibe 指令来查看所创建的主题信息：
+
+![image-20210901214452635](Kafka.assets/image-20210901214452635.png)
+
+在 kafka-topics.sh 脚本中还提供了一个 if-not-exists 参数 ， 如果在创建主题时带上了这个参 数，那么在发生命名冲突时将不做任何处理（既不创建主题，也不报错）
+
+![image-20210901214603820](Kafka.assets/image-20210901214603820.png)
+
+kafka-topics.sh 脚本在创建主题时还会检测是否包含“．”或“－”字符。 为什么要检测这两 个字符呢？ 因 为在 Kafka 的 内部做埋点时会根据主题的名称来命名 metrics 的名称， 并且会将点 号“．”改成下画线 “_’。 假设遇到一个名称为“ topic.1_2 ＇’的主题， 还有一个名称为“ topic_1 .2 ” 的主题， 那么最后的 metrics 的名称都会为“ topic_ 1_2 ”，这样就发生了名称冲突。 举例如下， 首先创建一个以“ topic.1_2 ”为名称的主题， 提示 WARNING 警告 ， 之后再创建“topic. 1_2 ” 时发生 InvalidTopicException 异常。
+
+Kafka 从 0.10.x 版本开始支持指定 broker 的机架信息（机架的名称）。如果指定了机架信息，则在分区副本分配时会尽可能地让分区副本分配到不同的机架上。指定机架信息是通过 broker 端参数 broker . rack 来配置的，比如配置当前 broker 所在的机架为“ RACK1”
+
+`broker.rack=RACKl`
+
+如果一个集群中有部分 broker 指定了机架信息，并且其余的 broker 没有指定机架信息，那 么在执行 kafka-topics.sh 脚本创建主题时会报出的 AdminOperationException 的异常
+
+此时若要成功创建主题 ， 要么将集群中的所有 broker 都加上机架信息或都去掉机架信息 ， 要么使用 `disable-rack- aware` 参数来忽略机架信息 
+
+![image-20210901214908387](Kafka.assets/image-20210901214908387.png)
+
+如果集群中 的所有 broker 都有机架信息，那么也可以使用 `disable - rack- aware` 参数来 忽略机架信息对分区副本的分配影响
+
+代码：
+
+```go
+func main() {
+	config := sarama.NewConfig()
+
+	topicDetial := sarama.TopicDetail{
+		NumPartitions:     2,
+		ReplicationFactor: 1,
+	}
+
+	admin, err := sarama.NewClusterAdmin([]string{"localhost:9092"}, config)
+	if err != nil {
+		panic(err)
+	}
+	defer admin.Close()
+
+	err = admin.CreateTopic("topic-demo", &topicDetial, false)
+	if err != nil {
+		panic(err)
+	}
+}
+```
+
+#### 1.2 分区副本的分配
+
+存疑？
 
 
-### 3.删除Topic
-
-`kafka-topics --delete --zookeeper localhost:2181 --topic first`
-
-### 4.查看详细信息
-
-`kafka-topics --topic test --describe --zookeeper localhost:2181`
 
 
 
+### 2.查看主题
 
+通过了list指令可以查看当前所有可用的主题
 
-### 5.其他问题：副本数不能超过机器数
+`kafka-topics --list --zookeeper localhost:2181`
+
+--topic还支待指定多个主题，可以和`--describe`结合使用
+
+![image-20210901221747072](Kafka.assets/image-20210901221747072.png)
+
+在使用 describe 指令查看主题信息时还可以额外指定 `topics-with-overrides`、 `under-repplicated-partitions`和`unavailable-partitions`这三个参数来增加 一 些 附加功能。
+
+增加`topics-with-overrides`参数可以找出所有包含覆盖配置的主题， 它只会列出包 含了与集群不 一样配置的主题。
+
+![image-20210901222142758](Kafka.assets/image-20210901222142758.png)
+
+`under-replicated-partitions`和`unavailable-partitions`参数都可以找出有 问题的分区。 通过under-replicated-partitions 参数可以找出所有包含失效副本的分 区。 包含失效副本的分区可能正在进行同步操作， 也有可能同步发生异常， 此时分区的JSR集 合小于AR集合。
+
+![image-20210901222123292](Kafka.assets/image-20210901222123292.png)
+
+通过`unavailable - partitions`参数可以查看主题中没有leader副本的分区
+
+![image-20210901222111233](Kafka.assets/image-20210901222111233.png)
+
+### 3.修改主题
+
+个修改的功能就是由kafka-topics.sh脚本中的alter指令提供的
+
+我们首先来看如何增加主题的分区数。 以前面的主题topic-config为例， 当前分区数为1, 修改为3
+
+![image-20210901223152925](Kafka.assets/image-20210901223152925.png)
+
+kafka不支持减少分区：
+
+```
+按照Kafka现有的代码逻辑， 此功能完全可以实现，不过也会使代码的复杂度急剧增大。 实现此功能需要考虑的因素很多， 比如删除的分区中的消息该如何处理？如果随着分区一起消 失则消息的可靠性得不到保障；如果需要保留则又需要考虑如何保留。 直接存储到现有分区的 尾部， 消息的时间戳就不会递增， 如此对于Spark、Flink这类需要消息时间戳（事件时间）的 组件将会受到影响；如果分散插入现有的分区， 那么在消息量很大的时候， 内部的数据复制会 占用很大的资源， 而且在复制期间， 此主题的可用性 又如何得到保障？与此同时， 顺序性问题、 事务性问题， 以及分区和副本的状态机切换问题都是不得不面对的。 反观这个功能的收益点却 是很低的， 如果真的需要实现此类功能， 则完全可以重新创建一个分区数较小的主题， 然后将 现有主题中的消息按照既定的逻辑复制过去即可。
+```
+
+在创建主题时有 一 个·if-not-exists·参数来忽略异常 ， 在 这里也有对应的参数 ， 如 果所要修改的主题不存在 ， 可以通过`if-exists`参数来忽略异常
+
+![image-20210901223406060](Kafka.assets/image-20210901223406060.png)
+
+除了修改分区数 ， 我们还可以使用kafka-topics.sh脚本的alter指令来变更主题的配置。 在创建主题的时候我们可以通过config参数来设置所要创建主题的相关参数 ， 通过这个参数 可以覆盖原本的默认配置
+
+![image-20210901223500685](Kafka.assets/image-20210901223500685.png)
+
+我们可以通过delete-config参数来删除之前覆盖的配置
+
+![image-20210901223525922](Kafka.assets/image-20210901223525922.png)
+
+### 4.配置管理
+
+kaflca-configs.sh 脚本是专门用来对配置进行操作的， 这里的操作是指在运行状态下修改原 有的配置，如此可以达到动态变更的目的。kaflca-configs.sh脚本包含变更配置alter和查看配 一 置describe这两种指令类型。 同使用kaflca-topics.sh脚本变更配置的原则 样， 增、 删、 改 的行为都可以看作变更操作， 不过kaflca-configs.sh脚本不仅可以支持操作主题相关的配置， 还 可以支待操作broker、 用户和客户端这3个类型的配置。
+
+kafka-configs.sh脚本使用entity-type参数来指定操作配置的类型，并且使用entity-name 参数来指定操作配置的名称。 比如查看主题 topic-config的配置可以按如下方式执行：
+
+![image-20210901223747967](Kafka.assets/image-20210901223747967.png)
+
+--describe指定了查看配置的指令动作，--entity-type指定了查看配置的实体类型， 一entity - name指定了查看配置的实体名称。 entity-type只可以配置4个值： topics、 brokers 、clients和users
+
+![image-20210901223839644](Kafka.assets/image-20210901223839644.png)
+
+使用alter指令变更配置时，需要配合add-config和delete-config这两个参数 起使用。 add-config参数用来实现配置的增、 改， 即覆盖原有的配置； delete-config参 数用来实现配置的删， 即删除被覆盖的配置以恢复默认值。
+
+![image-20210901223939141](Kafka.assets/image-20210901223939141.png)
+
+使用delete-con丘g参数删除配置时， 同add-config参数 一 样支持多个配置的操作，多个配置之间用逗号
+
+![image-20210901224019308](Kafka.assets/image-20210901224019308.png)
+
+### 5.删除Topic
+
+`kafka-topics --delete --zookeeper localhost:2181 --topic topic-demo`
+
+### 6.主题端参数
+
+| 主题端参数                               | 释义                                                         | 对应的broker端参数                       |
+| ---------------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
+| cleanup.policy                           | 日志压缩策略。 默认值为 delete, 还可以配 置为compactcompression.type消息的压缩类型。 默认值为producer, 表示 保留生产者中所使用的原始压缩类型。还可 以配置为uncompressed 、 snappy 、 lz4 、 gzip | log.cleanup.policy                       |
+| compression.type                         | 消息的压缩类型。 默认值为producer, 表示 保留生产者中所使用的原始压缩类型。还可 以配置为uncompressed 、 snappy 、 lz4 、 gzip | compression.type                         |
+| delete.retention.ms                      | 被标识为删除的数据能够保留多久。默认值 为86400000, 即 1 天   | log.cleaner.delete.retention. ms         |
+| file.delete.delay.ms                     | 清理文件之前可以等待多长时间，默认值为 60000, 即 l 分钟      | log.segment.delete.delay.ms              |
+| flush.messages                           | 需要收集多少消息才会将它们强制刷新到 磁盘， 默认值为Long.MAX_VALUE, 即让 操作系统来决定。建议不要修改此参数的默 认值 | log.flush.interval.messages              |
+| flush.ms                                 | 需要等待多久才会将消息强制刷新到磁盘， 默认值为Long.M心又VALUE, 即让操作系 统来决定。 建议不要修改此参数的默认值 | log.flush.interval.ms                    |
+| follower.replication.throttled. replicas | 用来配 置 被 限 制 速 率 的 主题所 对 应 的 follower副本列表 | follower.replication.throttled. replicas |
+| index.interval.bytes                     | 用来控制添加索引项的频率。每超过这个参 一 数所设置的消息 字节数时就可以添加 个 新的索引项， 默认值为4096 | log.index.interval.bytes                 |
+| leader.replication.throttled. replicas   | 用来配置被限制速率的主题所对应的leader 副本列表              | leader.replication.throttled. replicas   |
+| max.message.bytes                        | 消息的最大字节数， 默认值为1000012                           | message. max. bytes                      |
+| message.format.version                   | 消息格式的版本， 默认值为2.0-IVI                             | log.message.format.version               |
+| message.timestamp.difference. max.ms     | 消息中自带的时间戳与broker收到消息时 的 时 间戳之间最 大的差值， 默 认 值 为 Long.MAX_VALUE。此参数只有在meesage. timestamp.type参数设置为CreateTime 时才 有效 | log.message.timestamp. difference.max.ms |
+| message.timestamp.type                   | 消息的时间戳类型。 默认值为CreateTime , 还可以设置为ogAppendTime | Llog.message.timestamp. type             |
+| min.cleanable.dirty.ratio                | 日志清理时的最小污浊率， 默认值为0.5                         | log.cleaner.mm.cleanable. ratio          |
+| min.compaction.lag.ms                    | 日志再被清理前的最小保留时间， 默认值为0log.cleaner.min.compaction. lag.ms分区ISR集合中至少要有多少个副本，默认 值为1 | min.insync.replicas                      |
+| min.insync.replicas                      |                                                              |                                          |
+| preallocate                              | 在创建日志分段的时候是否要预分配空间， 默认值为false         | log.preallocate                          |
+| retention.bytes                          | 分区中所能保留的消息总量， 默认值为-1 , 即没有限制           | log.retention.bytes                      |
+| retention.ms                             | 使用delete的日志清理策略时消息能够保留 多长时间， 默认值为604800000, 即 7天。 如果设置为-1, 则表示没有限制 | log.retention.ms                         |
+| segment.bytes                            | 日志分段的最大值， 默认值为1073741824, 即 1GBsegment.mdex.bytes日志分段索引的最大值， 默认值为10485760, 即 10MB | log.segment.bytes                        |
+| log.index.size.max.bytes                 | 日志分段索引的最大值， 默认值为10485760, 即 10MB             | log.index.size.max.bytes                 |
+| segment.jitter.ms                        | 滚动日志分段时，在segment.ms的基础之上 增加的随机数， 默认为0 | log.roll.Jitter.ms                       |
+| segment.ms                               | 最长多久滚动一 次日志分段， 默认值为 604800000, 即 7天       | log.roll.ms                              |
+| unclean.leader.election.enable           | 是否可以从非ISR集合中选举leader副本， 默认值为false, 如果设置为true, 则可能造 成数据丢失 | unclean.leader.election. enable          |
+
+### 7.kafka-topic脚本的参数
+
+| 参 数名称                     | 释义                                                         |
+| ----------------------------- | ------------------------------------------------------------ |
+| alter                         | 用于修改主题， 包括分区数及主题的配置                        |
+| config <键值对＞              | 创建或修改主题时， 用于设置主题级别的参数                    |
+| create                        | 创建主题                                                     |
+| delete                        | 删除主题                                                     |
+| delete-config <配置名称＞     | 删除主题级别被覆盖的配置                                     |
+| describe                      | 查看主题的详细信息                                           |
+| disable-rack-aware            | 创建主题时不考虑机架信息                                     |
+| help                          | 打印帮助信息修改或删除主题时使用，只有当主题存在时才会执行动作 |
+| if-exists                     | 修改或删除主题时使用，只有当主题存在时才会执行动作           |
+| if-not-exists                 | 创建主题时使用，只有主题不存在时才会执行动作                 |
+| list                          | 列出所有可用的主题                                           |
+| partitions <分区数＞          | 创建主题或增加分区时指定分区数                               |
+| replica-assignment<分配方案＞ | 手工指定分区副本分配方案                                     |
+| replication-factor<副本数＞   | 创建主题时指定副本因子                                       |
 
 ## 08_生产者消费者发送消息
 
@@ -310,7 +516,7 @@ Kafka中的消费是基于 拉模式的。消息的消费 一 般有两种模式
 
 对于 Kafka 中的分区而言，它的每条消息都有唯一 的 offset，用来表示消息在分区中对应 的 位置 。 对于消费者而言 ， 它也有一个 offset 的概念，消费者使用 offset 来表示消费到分区中某个 消息所在的位置。
 
-在旧消费者客户端中，消费位移是存储在 ZooKeeper 中的 。 而在新消费者客户端中，消费 位移存储在 Kafka 内 部的主题 `__consumer offsets` 中 。 这里把将消费位移存储起来（持久化）的 动作称为“提交’3 ，消费者在消费完消息之后需要执行消费位移的提交。
+在旧消费者客户端中，消费位移是存储在 ZooKeeper 中的 。 而在新消费者客户端中，消费 位移存储在 Kafka 内 部的主题 `__consumer_offsets` 中 。 这里把将消费位移存储起来（持久化）的 动作称为“提交’3 ，消费者在消费完消息之后需要执行消费位移的提交。
 
 参考图 3-6 的消费位移 ， x 表示某一次拉取操作 中此分 区消息 的最大偏移量 ，假设当前消费 者已经消费了 x 位 置 的消息，那么我们就可以说消费者的消 费位移 为 X ，图中也用了 lastConsumedOffset 这个单词来标识它 。
 
