@@ -1285,9 +1285,39 @@ Kafka 可以保证同一个分区中的消息是有序的。如果生产者按�
 | Interceptor.classes                   | “”                                                           | 用来指定拦截器                                               |
 | transactional.id                      | null                                                         | 设置事物id，必须唯一                                         |
 
-## 09_Kafka数据日志分离
+## 09_Kafka日志存储
 
-略
+### 1.文件目录布局
+
+Kafka 中的消息是以主题为基本单位进行归类的， 各个主题在逻辑 上相互独立。 每个主题又可以分为 一 个或多个分区， 分区的数量可以在主题创建的时候指定， 也可以在之后修改。 每条消息在发送的时候会根据分区规则被追加到指定的分区中， 分区中的 每条消息都会被分配 一 个唯 一 的序列号， 也就是通常所说的偏移量(offset )
+
+如果分区规则设置得合理， 那么所有的消息可以均匀地分布到不同的分区中， 这样就可以 实现水平扩展。 不考虑多副本的情况， 一个分区对应 一 个日志(Log)。 为了防止Log过大， Ka住a又引入了日志分段(LogSegment)的概念， 将Log切分为多个LogSegment, 相当于 一 个 巨型文件被平均分配为多个相对较小的文件， 这样也便于消息的维护和清理。 事实上， Log 和 LogSegnient也不是纯粹物理意义上的概念， Log在物理上只以文件夹的形式存储， 而每个 LogSegment对应于磁盘上的 一个日志文件 和两个索引文件
+
+![image-20210902224157956](Kafka.assets/image-20210902224157956.png)
+
+在4.1.1节中我们知道Log对应了 一 个命名形式为<topic > <partition>的文件夹。 举个例子， 假设有 一 个名为"topic-log" 的主题 ， 此主题中具有4 个分区， 那么在实际物理存储上表现为 "topic-log-0" "topic-log-1" "topic-log-2" "topic-log-3"这4个文件夹：
+
+![image-20210902224315199](Kafka.assets/image-20210902224315199.png)
+
+向Log中追加 消息时是顺序写入的， 只有最后 一 个LogSegment才能执行写入操作， 在此 之 前所有的LogSegment都 不能写入数据。 为了方便描述， 我们将最后 一 个LogSegment称为 "activeSegment" , 即表示当前活跃的日志分段。 随着消息的不断写入 ， 当activeSegment满足 一定的条件时 ， 就需要创建新的activeSegment, 之后追加的消息将写入新的activeSegment。
+
+为了便于消息的检索， 每个LogSegment中的日志文件 （以 " .log"为文件后缀）都有对应 的两个索引文件：偏移量 索引文件（以".index"为文件后缀）和时间戳索引文件（以" .timeindex" 为文件后缀） 。 每个LogSegment都有 一 个基准偏移量baseOffset, 用来表示当前LogSegment 中第 一 条消息的offset。 偏移量是 一 个64位的长整型数， 日志文件和两个索引文件都是根据 基 准偏移量(baseOffset)命名 的， 名称固定为20 位数字， 没有达到的位数则用 0 填充。 比如第 一个LogSegment的基准偏移量为0, 对应的日志文件为00000000000000000000.log。
+
+![image-20210902224410810](Kafka.assets/image-20210902224410810.png)
+
+示例中第2个LogSegment对应的基准位移是133, 也说明了该LogSegment中的第 一 条消息的偏移量为133,
+
+注意每个LogSegment中不只包含" .log"".index"".timeindex"这3种文件， 还可能包 含" . deleted"" .cleaned " " .swap " 等临时文件， 以及 可能的" . snapshot"".txnindex" " leader-epoch-checkpoint"等文件。
+
+从更加宏观的视角上看， Katka 中的文件不只上面提及的这些文件， 比如还有 一 些检查点 文件， 当 一个Katka服务第 一次启动的时候， 默认的根目录下就会创建以下 5个文件
+
+![image-20210902224545116](Kafka.assets/image-20210902224545116.png)
+
+消费者提交的位移是保存在 Kafka内部_consume__offset 中的， 初始情况下这个主题并不存在， 当第 一次有消费者消费消息时会自动创建这个主题
+
+在某一 时刻， Kafka中的文件目录布局如图5 -2所示。 每 一 个根目录都会包含最基本的4 个检查点文件(xxx-checkpoint)和meta.properties文件。在创建主题的时候， 如果当前broker 中不止配置了 一 个根目录， 那么会挑选分区数最少的那个根目录来完成本次创建任务。
+
+![image-20210902224707447](Kafka.assets/image-20210902224707447.png)
 
 
 
