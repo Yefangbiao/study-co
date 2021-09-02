@@ -265,33 +265,89 @@ func main() {
 
 ### 2.查看主题
 
-通过了list指令可以查看当前所有可用的主题
+1. 通过了`list`指令可以查看当前所有可用的主题
 
 `kafka-topics --list --zookeeper localhost:2181`
 
---topic还支待指定多个主题，可以和`--describe`结合使用
+代码实现:
+
+**查看所有Topic**
+
+```go
+func main() {
+	consumer, err := sarama.NewConsumer([]string{"localhost:9092"}, nil)
+	defer consumer.Close()
+	if err != nil {
+		panic(err)
+	}
+
+	topics, err := consumer.Topics()
+	if err != nil {
+		panic(err)
+	}
+	for _, topic := range topics {
+		fmt.Println("topic:", topic)
+	}
+}
+```
+
+2. --topic还支待指定多个主题，可以和`--describe`结合使用
 
 ![image-20210901221747072](Kafka.assets/image-20210901221747072.png)
 
+**查看topic详细信息**
+
+```go
+func main() {
+	client, err := sarama.NewClient([]string{"localhost:9092"}, nil)
+	defer client.Close()
+	if err != nil {
+		panic(err)
+	}
+  // admin
+	admin, err := sarama.NewClusterAdminFromClient(client)
+	defer admin.Close()
+	if err != nil {
+		panic(err)
+	}
+  // get topics
+	topics, err := client.Topics()
+	if err != nil {
+		panic(err)
+	}
+  // get describe of topic
+	topicsMetadata, err := admin.DescribeTopics(topics)
+	if err != nil {
+		panic(err)
+	}
+	for _, metadata := range topicsMetadata {
+		fmt.Printf("topic name: %v\n", metadata.Name)
+		for _, partition := range metadata.Partitions {
+			fmt.Printf("partition: %v, ISR: %v, Replicas: %v, Leader: %v\n", partition.ID, partition.Isr, partition.Replicas, partition.Leader)
+		}
+	}
+}
+```
+
 在使用 describe 指令查看主题信息时还可以额外指定 `topics-with-overrides`、 `under-repplicated-partitions`和`unavailable-partitions`这三个参数来增加 一 些 附加功能。
 
-增加`topics-with-overrides`参数可以找出所有包含覆盖配置的主题， 它只会列出包 含了与集群不 一样配置的主题。
+增加`topics-with-overrides`参数可以找出所有包含覆盖配置的主题， 它只会列出包含了与集群不一样配置的主题。
 
 ![image-20210901222142758](Kafka.assets/image-20210901222142758.png)
 
-`under-replicated-partitions`和`unavailable-partitions`参数都可以找出有 问题的分区。 通过under-replicated-partitions 参数可以找出所有包含失效副本的分 区。 包含失效副本的分区可能正在进行同步操作， 也有可能同步发生异常， 此时分区的JSR集 合小于AR集合。
+`under-replicated-partitions`和`unavailable-partitions`参数都可以找出有 问题的分区。 通过`under-replicated-partitions` 参数可以找出所有包含失效副本的分 区。 包含失效副本的分区可能正在进行同步操作， 也有可能同步发生异常， 此时分区的JSR集 合小于AR集合。
 
 ![image-20210901222123292](Kafka.assets/image-20210901222123292.png)
 
-通过`unavailable - partitions`参数可以查看主题中没有leader副本的分区
+通过`unavailable-partitions`参数可以查看主题中没有leader副本的分区
 
 ![image-20210901222111233](Kafka.assets/image-20210901222111233.png)
 
 ### 3.修改主题
 
-个修改的功能就是由kafka-topics.sh脚本中的alter指令提供的
+个修改的功能就是由`kafka-topics.sh`脚本中的`alter`指令提供的
 
-我们首先来看如何增加主题的分区数。 以前面的主题topic-config为例， 当前分区数为1, 修改为3
+我们首先来看如何增加主题的分区数。 以前面的主题`topic-config`为例， 当前分区数为1, 修改为3
 
 ![image-20210901223152925](Kafka.assets/image-20210901223152925.png)
 
@@ -301,15 +357,15 @@ kafka不支持减少分区：
 按照Kafka现有的代码逻辑， 此功能完全可以实现，不过也会使代码的复杂度急剧增大。 实现此功能需要考虑的因素很多， 比如删除的分区中的消息该如何处理？如果随着分区一起消 失则消息的可靠性得不到保障；如果需要保留则又需要考虑如何保留。 直接存储到现有分区的 尾部， 消息的时间戳就不会递增， 如此对于Spark、Flink这类需要消息时间戳（事件时间）的 组件将会受到影响；如果分散插入现有的分区， 那么在消息量很大的时候， 内部的数据复制会 占用很大的资源， 而且在复制期间， 此主题的可用性 又如何得到保障？与此同时， 顺序性问题、 事务性问题， 以及分区和副本的状态机切换问题都是不得不面对的。 反观这个功能的收益点却 是很低的， 如果真的需要实现此类功能， 则完全可以重新创建一个分区数较小的主题， 然后将 现有主题中的消息按照既定的逻辑复制过去即可。
 ```
 
-在创建主题时有 一 个·if-not-exists·参数来忽略异常 ， 在 这里也有对应的参数 ， 如 果所要修改的主题不存在 ， 可以通过`if-exists`参数来忽略异常
+在创建主题时有 一 个·`if-not-exists`·参数来忽略异常 ， 在 这里也有对应的参数 ， 如 果所要修改的主题不存在 ， 可以通过`if-exists`参数来忽略异常
 
 ![image-20210901223406060](Kafka.assets/image-20210901223406060.png)
 
-除了修改分区数 ， 我们还可以使用kafka-topics.sh脚本的alter指令来变更主题的配置。 在创建主题的时候我们可以通过config参数来设置所要创建主题的相关参数 ， 通过这个参数 可以覆盖原本的默认配置
+除了修改分区数 ， 我们还可以使用kafka-topics.sh脚本的`alter`指令来变更主题的配置。 在创建主题的时候我们可以通过config参数来设置所要创建主题的相关参数 ， 通过这个参数 可以覆盖原本的默认配置
 
 ![image-20210901223500685](Kafka.assets/image-20210901223500685.png)
 
-我们可以通过delete-config参数来删除之前覆盖的配置
+我们可以通过`delete-config`参数来删除之前覆盖的配置
 
 ![image-20210901223525922](Kafka.assets/image-20210901223525922.png)
 
@@ -333,9 +389,57 @@ kafka-configs.sh脚本使用entity-type参数来指定操作配置的类型，�
 
 ![image-20210901224019308](Kafka.assets/image-20210901224019308.png)
 
+**改变配置**
+
+改变主题端参数配置
+
+```go
+func main() {
+	client, err := sarama.NewClient([]string{"localhost:9092"}, nil)
+	defer client.Close()
+	if err != nil {
+		panic(err)
+	}
+	admin, err := sarama.NewClusterAdminFromClient(client)
+	defer admin.Close()
+	if err != nil {
+		panic(err)
+	}
+
+	entries := make(map[string]*string)
+	value := "60000"
+	entries["retention.ms"] = &value
+	err = admin.AlterConfig(sarama.TopicResource, "topic-A", entries, false)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("更改成功")
+}
+
+```
+
 ### 5.删除Topic
 
 `kafka-topics --delete --zookeeper localhost:2181 --topic topic-demo`
+
+**删除代码**
+
+```go
+func main() {
+	client, err := sarama.NewClient([]string{"localhost:9092"}, nil)
+	defer client.Close()
+	if err != nil {
+		panic(err)
+	}
+	admin, err := sarama.NewClusterAdminFromClient(client)
+	err = admin.DeleteTopic("topic-A")
+	defer admin.Close()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("删除成功")
+}
+```
 
 ### 6.主题端参数
 
