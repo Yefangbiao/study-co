@@ -489,6 +489,322 @@ func main() {
 | replica-assignment<分配方案＞ | 手工指定分区副本分配方案                                     |
 | replication-factor<副本数＞   | 创建主题时指定副本因子                                       |
 
+### 8.初识KafkaAdminClient
+
+#### 8.1 基本使用
+
+一 般情况下，我们都习惯使用kafka-topics.sh脚本来管理主题，但有些时候我们希望将主题 管理类的功能集成到公司内部的系统中， 打造集管理、 监控、 运维、 告警为 一 体的生态平台， 那么就需要以程序调用API的方式去实现。 本节主要介绍`KafkaAdminClient` 的基本使用方式， 以及采用这种调用API方式下的创建主题时的合法性验证。
+
+KafkaAdmin实现了很多方法
+
+```go
+type ClusterAdmin interface {
+	// Creates a new topic. This operation is supported by brokers with version 0.10.1.0 or higher.
+	// It may take several seconds after CreateTopic returns success for all the brokers
+	// to become aware that the topic has been created. During this time, listTopics
+	// may not return information about the new topic.The validateOnly option is supported from version 0.10.2.0.
+	CreateTopic(topic string, detail *TopicDetail, validateOnly bool) error
+
+	// List the topics available in the cluster with the default options.
+	ListTopics() (map[string]TopicDetail, error)
+
+	// Describe some topics in the cluster.
+	DescribeTopics(topics []string) (metadata []*TopicMetadata, err error)
+
+	// Delete a topic. It may take several seconds after the DeleteTopic to returns success
+	// and for all the brokers to become aware that the topics are gone.
+	// During this time, listTopics  may continue to return information about the deleted topic.
+	// If delete.topic.enable is false on the brokers, deleteTopic will mark
+	// the topic for deletion, but not actually delete them.
+	// This operation is supported by brokers with version 0.10.1.0 or higher.
+	DeleteTopic(topic string) error
+
+	// Increase the number of partitions of the topics  according to the corresponding values.
+	// If partitions are increased for a topic that has a key, the partition logic or ordering of
+	// the messages will be affected. It may take several seconds after this method returns
+	// success for all the brokers to become aware that the partitions have been created.
+	// During this time, ClusterAdmin#describeTopics may not return information about the
+	// new partitions. This operation is supported by brokers with version 1.0.0 or higher.
+	CreatePartitions(topic string, count int32, assignment [][]int32, validateOnly bool) error
+
+	// Alter the replica assignment for partitions.
+	// This operation is supported by brokers with version 2.4.0.0 or higher.
+	AlterPartitionReassignments(topic string, assignment [][]int32) error
+
+	// Provides info on ongoing partitions replica reassignments.
+	// This operation is supported by brokers with version 2.4.0.0 or higher.
+	ListPartitionReassignments(topics string, partitions []int32) (topicStatus map[string]map[int32]*PartitionReplicaReassignmentsStatus, err error)
+
+	// Delete records whose offset is smaller than the given offset of the corresponding partition.
+	// This operation is supported by brokers with version 0.11.0.0 or higher.
+	DeleteRecords(topic string, partitionOffsets map[int32]int64) error
+
+	// Get the configuration for the specified resources.
+	// The returned configuration includes default values and the Default is true
+	// can be used to distinguish them from user supplied values.
+	// Config entries where ReadOnly is true cannot be updated.
+	// The value of config entries where Sensitive is true is always nil so
+	// sensitive information is not disclosed.
+	// This operation is supported by brokers with version 0.11.0.0 or higher.
+	DescribeConfig(resource ConfigResource) ([]ConfigEntry, error)
+
+	// Update the configuration for the specified resources with the default options.
+	// This operation is supported by brokers with version 0.11.0.0 or higher.
+	// The resources with their configs (topic is the only resource type with configs
+	// that can be updated currently Updates are not transactional so they may succeed
+	// for some resources while fail for others. The configs for a particular resource are updated automatically.
+	AlterConfig(resourceType ConfigResourceType, name string, entries map[string]*string, validateOnly bool) error
+
+	// Creates access control lists (ACLs) which are bound to specific resources.
+	// This operation is not transactional so it may succeed for some ACLs while fail for others.
+	// If you attempt to add an ACL that duplicates an existing ACL, no error will be raised, but
+	// no changes will be made. This operation is supported by brokers with version 0.11.0.0 or higher.
+	CreateACL(resource Resource, acl Acl) error
+
+	// Lists access control lists (ACLs) according to the supplied filter.
+	// it may take some time for changes made by createAcls or deleteAcls to be reflected in the output of ListAcls
+	// This operation is supported by brokers with version 0.11.0.0 or higher.
+	ListAcls(filter AclFilter) ([]ResourceAcls, error)
+
+	// Deletes access control lists (ACLs) according to the supplied filters.
+	// This operation is not transactional so it may succeed for some ACLs while fail for others.
+	// This operation is supported by brokers with version 0.11.0.0 or higher.
+	DeleteACL(filter AclFilter, validateOnly bool) ([]MatchingAcl, error)
+
+	// List the consumer groups available in the cluster.
+	ListConsumerGroups() (map[string]string, error)
+
+	// Describe the given consumer groups.
+	DescribeConsumerGroups(groups []string) ([]*GroupDescription, error)
+
+	// List the consumer group offsets available in the cluster.
+	ListConsumerGroupOffsets(group string, topicPartitions map[string][]int32) (*OffsetFetchResponse, error)
+
+	// Delete a consumer group.
+	DeleteConsumerGroup(group string) error
+
+	// Get information about the nodes in the cluster
+	DescribeCluster() (brokers []*Broker, controllerID int32, err error)
+
+	// Get information about all log directories on the given set of brokers
+	DescribeLogDirs(brokers []int32) (map[int32][]DescribeLogDirsResponseDirMetadata, error)
+
+	// Get information about SCRAM users
+	DescribeUserScramCredentials(users []string) ([]*DescribeUserScramCredentialsResult, error)
+
+	// Delete SCRAM users
+	DeleteUserScramCredentials(delete []AlterUserScramCredentialsDelete) ([]*AlterUserScramCredentialsResult, error)
+
+	// Upsert SCRAM users
+	UpsertUserScramCredentials(upsert []AlterUserScramCredentialsUpsert) ([]*AlterUserScramCredentialsResult, error)
+
+	// Close shuts down the admin and closes underlying client.
+	Close() error
+}
+```
+
+### 9. 主题合法性验证
+
+一般情况下， Kafka 生产环境 中的 auto.create.topi cs . enable 参数会被设置为 false ，即自动创建主题这条路会被堵住。 kafka-topics.sh 脚本创建的方式一般由运维人员操作， 普通用户无权过问。那么 KafkaAdminClient 就为普通用户提供了一个“口子”，或者将其集成 到公司内部的资源申请、审核系统中会更加方便 。普通用户 在创建主题的时候，有可能由于误 操作或其他原因而创建了不符合运维规范的主题，比如命名不规范，副本因子数太低等，这些 都会影响后期的系统运维 。 如果创建主题的操作封装在资源申请、 审核系统中，那么在前端就 可以根据规则过滤不符合规范的申请操作 。
+
+Kafka broker 端有－个这样的参数：create.topic . policy.class.name ，默认值为null ，它 提供了一个入口用来验证主题创建的合法性。使用方式很简单，只需要自定义实现 org.apache.kafka.se凹er.policy.CreateTopicPolicy 接口，比如下面示例中的 PolicyDemo 。然后在broker 端的配置文件 config/server.properties 中配置参数 create . topic . policy . class . name 的值为 org.apache.kafka.se凹er.policy.PolicyDemo ， 最后启动服务。
+
+存疑？
+
+### 10.分区管理
+
+包括优先副本的选举、分区重分配、 复制限流、修改副本因子
+
+分区使用多副本机制来提升可靠性， 但只有leader副本对外提供读写服务， 而follower副 本只负责在内部进行消息的同步。如果 一 个分区的leader副本不可用， 那么就意味着整个分区 变得不可用， 此时就需要Kafka从剩余的follower副本中挑选一 个新的leader副本来继续对外 提供服务。 虽然不够严谨， 但从某种程度上说， broker节点中leader副本个数的多少决定了这 个节点负载的高低。
+
+随着时间的更替， Kafka集群的broker节点不可避免地会遇到宅机或崩溃的问题， 当 分区 的leader节点发生故障时， 其中 一 个follower节点就会成为新的leader节点， 这样就会导致集 群的负载不均衡， 从而影响整体的健壮性和稳定性。 当原来的leader节点恢复之后重新加入集 群时， 它只能成为 一个新的follower节点而不再对外提供服务。
+
+![image-20210902214528696](Kafka.assets/image-20210902214528696.png)
+
+为了能够有效地治理负载失衡的情况，Kafka引入了优先副本(preferred replica) 的 概念 。 所谓的优先副本 是指在 AR 集合列表中的第 一 个副本 。 比如上面 主题 topic-partitions中 分区 0 的AR集合列表 (Replicas)为[1,2 0 , ], 那么分区0 的优先副本即为1。 理想情况下， 优先副 本就是该分区的leader副本， 所以也可以称之为 preferred leader。 Kafka要确保所 有主题的优先 副本在Kafka集群中均匀分布， 这样就保证了所有分区的le ader均衡 分布。 如果leader 分布过 于集中， 就会造成集群 负载不均衡。
+
+所谓的优先副本的选举 是指通过 一 定的方式促使优先副本 选举为 leader副本， 以此来促进 集群的负载均衡， 这 一 分区平衡 行为也可以称为 。
+
+需要注意的是， 分区平衡 并不意味着Kafka集群的负载均衡， 因为还 要考虑集群中的分区 分配 是否均衡。 更进 一 步， 每个 分区的leader副本的负载也是各不相同的 ， 有些leader副本的 负载很高， 比如需要承载TPS为30000 的负荷， 而有些leader副本只需承载个位数的负荷 。 也 就是说， 就算集群中的分区 分配均衡、leader 分配均衡， 也并不能 确保整个集群的负载就是均 衡的， 还需要其他 一 些硬性的指标来做进 一 步的衡量， 这个 会在后面的章节中涉及， 本节只探 讨优先副本的选举。
+
+在Kafka中可以提供分区自动平衡的功能， 与此对应的broker端参数 是 auto.leader. rebalance.enable, 此参数的默认值为tru e , 即默认情况下此 功能是开启的。 如果开启分区 自动平衡的功能， 则Kafka的控制器会启动 一 个定时任务， 这个定时任务会轮询所有的broker 节点， 计算每个broker节点的分区不平衡率(broker中的不平衡率＝非优先副本的leader个数／ 分区总数）是否超过leader.imbalance.per.broker.percentage参数配置的比值， 默认值为10%, 如果超过设定的比值则会自动执行优先副本的选举动作以求分区平衡。 执行 周期由参数leader.imbalance.check.interval.seconds控制， 默认值为300秒， 即 5分钟。
+
+Kafka中kafka-perferred-replica-election.sh脚本提供了对分区leader副本进行重新平衡的功 一 能。优先副本的选举过程是 个安全的过程，Kafka客户端 可以自动感知分区leader副本的变 更。 下面的示例演示了kafka-perferred-replica-election.sh脚本的具体用法：
+
+![image-20210902214727948](Kafka.assets/image-20210902214727948.png)
+
+kafka-perferred-replica-election.sh脚本中还提供了path-to-json-file参数来小批量地 对部分分区执行优先副本的选举操作。通过path-to-json-file参数来指定 一 个 JSON 文件， 这个 JSON 文件里保存需要执行优先副本选举的分区清单。
+
+举个例子， 我们再将集群中brokerld为2的节点重启， 不过我们现在只想对主题 topicpart山ons执行优先副本的选举操作， 那么先创建一 个 JSON 文件， 文件名假定为election.json, 文件的内容如下：
+
+![image-20210902215144258](Kafka.assets/image-20210902215144258.png)
+
+然后通过kafka-perferred-replica-election.sh脚本配合path-to-json-file参数来对主题 topic-partitions执行优先副本的选举操作， 具体示例如下
+
+![image-20210902215227722](Kafka.assets/image-20210902215227722.png)
+
+#### 10.1 分区重分配
+
+当集群中的 一 如果节点上的分区是单副本的， 那么这些分区就变 得不可用了， 在节点恢复前， 相应的数据也就处于丢失状态；如果节点上的分区是多副本的， 那么位于这个节点上的leader副本的角色会转交到集群的其他 follower副本中。 总而言之， 这 个节点上的分区副本都已经处于功能失效的状态，Kafka并不会将这些失效的分区副本自动地 迁移到集群中剩余的可用broker节点上， 如果放任不管， 则不仅会影响整个集群的均衡负载， 还会影响整体服务的可用性和可靠性。
+
+当要对集群中的 一 个节点进行有计划的下线操作时， 为了保证分区及副本的合理分配， 我 们也希望通过某种方式能够将该节点上的分区副本迁移到其他的可用节点上。
+
+当集群中新增broker节点时， 只有新创建的主题分区才有可能被分配到这个节点上， 而之 前的主题分区并不会自动分配到新加入的节点中， 因为在它们被创建时还没有这个新节点， 这 样新节点的负载和原先节点的负载之间严重不均衡。
+
+为了解决上述问题，需要让分区副本再次进行合理的分配，也就是所谓的分区重分配。Kafka 提供了kafka-reassign-partitions.sh脚本来执行分区重分配的工作， 它可以在集群扩容、broker节点失效的场景下对分区进行迁移。
+
+kafka-reassign-partitions.sh脚本的使用分为3 个步骤:1.创建包括主题清单的json文件 2.根据主题清单和broker结点重新生成一套方案 3.执行具体的分配动作
+
+下面我们通过 一 个具体的案例来演示kafka-reassign-part山ons.sh脚本的用法。首先在 一 个由 3个节点 (broker 0、broker 1、broker2)组成的集群中创建 一 个主题topic-reassign, 主题中包 含4个分区和2个副本：
+
+![image-20210902215612988](Kafka.assets/image-20210902215612988.png)
+
+我们可以观察到主题topic-reassi gn 在3个节点中都有相应的分区副本分布。由于某种原因， 我们想要下线brokerld为1的broker 节点 ， 在此之前， 我们要做的就是将其上的分区副本迁移 一 出去。首先创建一份json文件，文件内容为要进行分区重分配的主题清单
+
+![image-20210902215641376](Kafka.assets/image-20210902215641376.png)
+
+第二步就是根据这个JSON文件和指定所要分配的broker节点列表来生成 配方案， 具体内容参考如下：
+
+![image-20210902215718864](Kafka.assets/image-20210902215718864.png)
+
+上面的示例中包含4个参数， 其中zookeeper已经很常见了， 用来指定ZooKeeper的地 址。generate是 kafka-reassign -parti tions.sh脚本中指令类型的参数，可以类比于kafk:a-topics.sh 脚本中的create、 巨st等， 它用来生成 一 个重分配的候选方案 。 topic-to-move-json 用来指定分区重分配对应的主题清单文件的路径， 该清单文件的具体的格式 可以归纳为 { " topics " : [{ " topic": " foo"},{ " topic " : " fool"}],"version": 1 }。 broker-list用来指定 所要分配的 broker节点列表， 比如示例中的"0,2"。
+
+上面示例中打印出了两个 JSON 格式的内容。 第 一 个"Current parti tion replica assignment" 所对应的 JSON 内容为当前的分区副本分配情况， 在执行分区重分配的时候最好将这个内容保 存起来， 以备后续的回滚操作。 第二个"Proposed partition reassignment configura tion"所对应的 JSON 内容为重分配的候选方案， 注意这里只是生成 一 份可行性的方案， 并没有真正执行重分 配的动作。 生成的可行性方案的具体算法和创建主题时的 一 样， 这里也包含了机架信息，
+
+我们需要将第二个 JSON 内容保存在 一 个 JSON 文件中，假定这个文件的名称为 project.json。
+
+第三步执行具体的重分配动作
+
+![image-20210902215856428](Kafka.assets/image-20210902215856428.png)
+
+可以看到主题中的所有分区副本都只在0和2的broker节点上分布了。
+
+在第三步的操作 中又多了2个参数，execute也是指令类型的参数，用来指定执行重分配 的动作。 reassignment-json-file指定分区重分配方案的文件路径， 对应于示例中的 project.json文件。
+
+除了让脚本自 动 生成候选方案， 用户还可以自定义重分配方案， 这样也就不需要执行第一  步和第二步的 操作了。
+
+#### 10.2 复制限流
+
+分区重分配本质在于数据复制，先增加新的副本，然后进行数据同 步， 最后删除旧的副本来达到最终的目的。
+
+数据复制会占用额外的资源， 如果重分配的量太大 必然会严重影响整体的性能， 尤其是处于业务高峰期的时候。 减小重分配的粒度， 以小批次的 方式来操作是 一 如果集群中某个主题或某个分区的流量在某段时间内特别 种可行的解决思路。 大， 那么只靠减小粒度是不足以应对的， 这时就需要有 一个限流的机制
+
+副本间的复制限流有两种实现方式：kafka-config.sh脚本和kafka-reassign-partitions.sh脚本
+
+首先， 我们讲述如何通过kafka-config.sh 脚本来实现限流，kafka-config.sh脚本主要以动态配置的方式来达到限流的目的， 在broker级别有两个与复制限 流相关的配置参数： follower.replication.throttled.rate和leader.replication. throttled.rate, 前者用千设置follower副本复制的速度， 后者用来设置leader副本传输的 速度， 它们的单位都是B/s。 通常情况下， 两者的配置值是相同的。
+
+![image-20210902220729488](Kafka.assets/image-20210902220729488.png)
+
+删除刚刚添加的配置也很简单
+
+![image-20210902220804303](Kafka.assets/image-20210902220804303.png)
+
+在主题 级别也有两个相关的参数来限制复制的速度：leader.replication.throttled.replicas和follower.replication.throttled.replicas,
+
+它们分别用来配置被限 制速度的主题所对应的leader副本列表和follower副本列表
+
+![image-20210902220902497](Kafka.assets/image-20210902220902497.png)
+
+在上面示例中， 主题topic-throttle的三个分区所对应的leader节点分别为0、1、2, 即分区 与代理的映射关系为0:0、1: 1、2:2, 而对应的follower节点分别为1、2、0, 相关的分区与代 理的映射关系为0:1、1:2、 2:0, 那么此主题的限流副本列表及具体的操作细节如下：
+
+![image-20210902220951703](Kafka.assets/image-20210902220951703.png)
+
+在了解了与限流相关的4个配置参数之后， 我们演示一下带有限流的分区重分配的用法
+
+首先按照4.3.2节的步骤创建 一个包含可行性方案的 pro ject.json文件，
+
+![image-20210902221109559](Kafka.assets/image-20210902221109559.png)
+
+接下来设置被限流的副本列表， 这里就很有讲究了，首先看 一 下重分配前和分配后的分区,副本布局对比， 详细如下：
+
+![image-20210902221036261](Kafka.assets/image-20210902221036261.png)
+
+如果分区重分配会引起某个分区AR集合的变更， 那么这个分区中与leader有关的限制会 应用千重分配前的所有副本，因为任何 一 个副本都可能是leader, 而与follower有关的限制会应 用于所有移动的目的地。 从概念上理解会比较抽象， 这里不妨举个例子， 对上面的布局对比而 言， 分区0重分配的AR为[0,1], 重分配后的AR为[0,2], 那么这里的目的地就是新增的2。 也 就是说， 对分区0而言， leader.replication.throttled.replicas配置为[0:0,0:1], follower.replication.throttled.replicas 配置为[0:2]。 同理， 对于分区1 而言， leader.replication.throttled.replicas配置为[1:1,1:2],follower. replication. throttled.replicas配置为[1:O]。 分区3的AR集合没有发生任何变化， 这里可以忽略。
+
+获取限流副本列表之后， 我们就可以执行具体的操作了
+
+![image-20210902221309129](Kafka.assets/image-20210902221309129.png)
+
+接下来再设置br oker2的复制速度为10B/s, 这样在下面的操作中可以很方便地观察限流与 不限流的不同：
+
+![image-20210902221322694](Kafka.assets/image-20210902221322694.png)
+
+在执行具体的重分配操作之前， 我们需要开启 一 个生产者并向主题topic-throttle中发送一  批消息， 这样可以方便地观察正在进行数据复制的过程
+
+之后我们再执行正常的分区重分配的操作， 示例如下
+
+![image-20210902221349807](Kafka.assets/image-20210902221349807.png)
+
+执行之后， 可以查看执行的进度，示例如下：
+
+![image-20210902221426964](Kafka.assets/image-20210902221426964.png)
+
+可以看到分区topic-throttle-0还在同步过程中，因 为 我们之前设置了broker 2的复制速度为 10B/s, 这样使同步变得缓慢， 分区topic-throttle-0需要同步数据到位于broker 2的新增副本中。 随着时间的推移， 分区topic-throttle-0最终会变成"completed successful"的状态。
+
+为了不影响Kafka本身的性能， 往往对临时设置的 一 些限制性的配置在使用完后要及时删 除， 而kafka-reassign-partitions.sh脚本配合指令参数verify就可以实现这个功能，在所有的 分区都重分配完成之后执行查看进度的命令时会有如下的信息：
+
+![image-20210902221503957](Kafka.assets/image-20210902221503957.png)
+
+#### 10.3 修改副本因子
+
+创建主题之后我们还可以修改分区的个数， 同样可以修改副本因子（副本数）。 修改副本 因子的使用场景也很多， 比如在创建主题时填写了错误的副本因子数而需要修改， 再比如运行 一段时间之后想要通过增加副本因子数来提高容错性和可靠性。
+
+我们可以自行添加一个副本，可以改成下面的内容
+
+![image-20210902221611333](Kafka.assets/image-20210902221611333.png)
+
+注意增加副本因子时也要在log_dirs中添加一个"any" , 这个log_dirs代表Kafka中的日志目录， 对应于broker端的log.dir或log.dirs参数的配置值， 如果不 需 要关注此方面的细节， 那么可以简单地设置为"any"。
+
+![image-20210902221651314](Kafka.assets/image-20210902221651314.png)
+
+### 11. 如何选择合适的分区数
+
+在 Kafka 中 ，性能与分区数有着必然的关系，在设定分区数时一般也需要考虑性能的因素。
+
+对不同的硬件而言，其对应的性能也会不太一样。在实际生产环境中，我们需要了解一套硬件
+
+所对应的性能指标之后才能分配其合适的应用和负荷，所以性能测试工具必不可少。
+
+本节要讨论的性能测试工具是 Kafka 本身提供的用于生产者性能测试的 kafka-produce-perf-test.sh 和用于消费者性能测试的 kafka -consumer-perf-test. sh。
+
+首先我们通过一个示例来了 解一下 kafka-producer-perf-test.sh 脚本的使用。我们向一个只有
+
+l 个分区和 l 个副本的主题 topic-1 中发送 100 万条消息，并且每条消息大小为 1024B ，
+
+对应的 acks 参数为 1. 详细内容参考如下 ：
+
+![image-20210902222215303](Kafka.assets/image-20210902222215303.png)
+
+示例中在使用katka-producer-perf-test.sh脚本时用了多 一 个参数， 其中七opic 用来指定生 产者发送消息的目标主题； nurn-records用来指定发送消息的总条数； record-size 用来 设置每条消息的字节数； producer-props 参数用来指定生产者的配置， 可同时指定多组配 置，各组配置之间以空格分隔，与producer-props参数对应的还有 一 个producer.config 参数， 它用来指定生产者的配置文件； throughput 用来进行限流控制， 当设定的值小于0时 不限流， 当设定的值大于0时， 当发送的吞吐量大于该值时就会被阻塞 一段时间。
+
+kafka-producer-perf-test.sh脚本中 还有 一 个有意思的参数print-metrics, 指定了这个参 数时会在测试完成之后打印很多指标信息， 对很多测试任务而言具有 一 定的参考价值。 
+
+#### 11.1 分区数越多吞吐量越高吗
+
+分区是Kafka 中最小的并行操作单元， 对生产者而言， 每 一 个分区的数据写入是完全可以 并行化的；对消费者而言， K afka 只允许单个分区中的消息被 一 个消费者线程消费， 一 个消费 组的消费并行度完全依赖于所消费的分区数。 如此看来， 如果 一 个主题中的分区数越多， 理论 上所能达到的吞吐量就越大， 那么事实真的如预想的 一 样吗？
+
+我们使用 4.4.1节中介绍的性能测试工具来实际测试 一 下。 首先分别创建分区数为1、 20、 50、100、200、500、1000的 主题，对应的主题名称分别 为 topic-I、topic-20、topic-50、topic-100、 topic-200、 topic-500、 topic-I000, 所有主题的副本因子都设置为1 。
+
+消息中间件的性能 一 般是指吞吐量（广义来说还包括延迟）。 抛开硬件资源的影响， 消息 写入的吞吐量还会受到消息大小 、 消息压缩方式、 消息发送方式（同步／异步） 、 消息确认类型
+
+(acks) 、 副本因子等参数的影响， 消息消费的吞吐量还会受到应用逻辑处理速度的影响。 本 案例中暂不考虑这些因素的影响，所有的测试除了主题的分区数不同， 其余的因素都保持相同。
+
+使用 kafka - producer-perf-test.sh脚本分别向这些主题中发送100万条消息体大小为 1KB的 消息， 对应的测试命令如下：
+
+![image-20210902222436521](Kafka.assets/image-20210902222436521.png)
+
+对应的生产者性能测试结果如图4-2所示。 不同的硬件环境， 甚至不同批次 的测试得到的 测试结果也不会完全相同， 但总体趋势还是会保持和图4-2中的 一 样。
+
+![image-20210902222449487](Kafka.assets/image-20210902222449487.png)
+
+上面针对的是消息生产者的测试， 对消息消费者而言同样有 吞吐量方面的考量。 使用 kafka-consumer-perf-test.sh脚本分别消费这些主题中的100万条消息， 对应的测试命令如下：
+
+![image-20210902222508770](Kafka.assets/image-20210902222508770.png)
+
+![image-20210902222522307](Kafka.assets/image-20210902222522307.png)
+
+
+
 ## 08_生产者消费者发送消息
 
 ### 1.消费者消费消息
