@@ -1568,11 +1568,274 @@ Kafka 在设计时采用了文件追加的方式来写 入消息， 即只能在
 
 所谓的零拷贝是指将数据直接从磁盘文件复制到网卡设备中，而不需要经由应用程序之 手 。
 
-## 10_Kafka入门_回顾
+## 10_Kafka：深入服务端
 
-略
+### 10.1协议设计
 
+在实际应用中，Kafka经常被用作高性能、 可扩展的消息中间件。Kafka自定义了 一 组基于 TCP的二进制协议， 只要遵守这组协议的格式， 就可以向Kafka发送消息， 也可以从Kafka中 拉取消息， 或者做一 些其他的事情， 比如提交消费位移等。
 
+一 共包含了43种协议类型， 每种协议类型都有对应的请求 (Request)和响应(Response), 它们都遵守特定的协议模式 。 每种类型的Request都包含相同 结构的协议请求头(RequestHeader)和不同结构的协议请求体(RequestBody) , 如 图6-1所示。
+
+![image-20210904131115687](Kafka.assets/image-20210904131115687.png)
+
+协议请求头中包含4个域（Field): api_key、 api_version、 correlation_id和client_id
+
+| 域(Field)      | 描述(Description)                                            |
+| -------------- | ------------------------------------------------------------ |
+| api_key        | API标识， 比如PRODUCE、FETCH等分别表示发送消息和拉取消息的请求 |
+| api version    | API版本号                                                    |
+| correlation_id | 一 由客户端指定的 个数字来唯 一地标识这次请求的id, 服务端在处理完请求后也 会把同样的coorelation_id写到Response中，这样客户端就能把某个请求和响应 对应起来了 |
+| client_id      | 客户端id                                                     |
+
+每种类型的Response也包含相同结构的协议响应头(ResponseHeader)和不同结构的响应 体(ResponseBody) , 如图6-2所示。
+
+![image-20210904131355654](Kafka.assets/image-20210904131355654.png)
+
+协议响应头中只有 一个correlation_id
+
+细心的读者会发现不管是在图6-1中还是在图6-2中都有类似int32、int16、 string 的字样， 它们用来表示当前域的数据类型。 Kafka中所有协议类型的Request和Response的结构都是具 备固定格式的， 并且它们都构建千多种基本数据类型之上。 这些基本数据类型如图6-2所示。
+
+| 类型(Type)      | 描述(Description)                                            |
+| --------------- | ------------------------------------------------------------ |
+| boolean         | 布尔类型，使用0和1分别代表false和true                        |
+| int8            | 带符号整型， 占8位， 值在-2^7至2^7- 1之间                    |
+| intl6           | 带符号整型， 占16位， 值在-2^15 至2^15-1之间                 |
+| int32           | 带符号整型， 占32位， 值在-2^31至2^31- 1之间                 |
+| int64           | 带符号整型， 占64位， 值在-2^63至2^63-1之间                  |
+| unit32          | 无符号整型， 占32位， 值在0至2^32 - 1之间                    |
+| varint          | 变长整型， 值在 －2^31-2^31-1之间， 使用ZigZag编码           |
+| varlong         | 变长长整型， 值在-2^63至2^63- 1之间， 使用ZigZag编码         |
+| string          | 字符串类型。 开头是 一个int 16类型的长度字段（非负数），代表字符串的长度 N, 后面包含N个UTF-8编码的字符 |
+| nullable_string | 可为空的字符串类型。 如果此类型的值为空， 则用-J表示， 其余情况同string 类型 一样 |
+| bytes           | 表示 一个字节序列。开头是 一个int32类型的长度字段，代表后面字节序列的长 度N, 后面再跟N个字节 |
+| nullable_bytes  | 个消息序列，表示Kafka中的一也可以看作nullable_bytes          |
+| array           | 表示 一 个给定类型T的数组， 也就是说， 数组中包含若干T类型的实例。 T可 以是基础类型或基础类型组成的 一 个结构。该域开头的是 一 个int32类型的长度 字段，代表T实例的个数为N, 后面再跟N个T的实例。可用-1表示 一 个空的 数组 |
+
+下面就以最常见的消息发送和消息拉取的两种协议类型做细致的讲解。 首先要讲述的是消 息发送的协议类型， 即ProduceRequest/ ProduceResponse, 对应的api_key = 0, 表示PRODUCE。
+
+从Kafka建立之初， 其所支待的协议类型就 一 直在增加， 并且对特定的协议类型而言， 内部的 组织结构也并非 一 成不变。 以ProduceRequest/ ProduceResponse为例， 截至目前就经历了7个 版本(v0-v6)的变迁。 下面就以最新版本(V6, 即api_version = 6)的结构为例来做细致的 讲解。 ProduceRequest的组织结构如图6-3所示。
+
+![image-20210904132137763](Kafka.assets/image-20210904132137763.png)
+
+除了请求头中的4个域， 其余ProduceRequest请求体中各个域的含义如表6-3所示
+
+| 域(Field)        | 类型            | 描述(Description)                                            |                                           |
+| ---------------- | --------------- | ------------------------------------------------------------ | ----------------------------------------- |
+| transactional id | nullable_string | 事务心从Kafka 0.11.0开始支持事务。 如果不使用事 务的功能， 那么该域的值为null |                                           |
+| acks             | intl6           | 对应2.3节中提及的客户端参数acks                              |                                           |
+| timeout          | mt32            | 请求超时时间， 对应客户端参数 request.timeout.ms, 默 认值为30000, 即30秒 |                                           |
+| topic_data       | array           | 代表ProduceRequest中所要发送的数据集合。 以主题名 称分类， 主题中再以分区分类。 注意这个域是数组类型 |                                           |
+|                  | topic           | string                                                       | 主题名称                                  |
+|                  | data            | array                                                        | 与主题对应的数据， 注意这个域也是数组类型 |
+|                  | int32           | partition                                                    | 分区编号                                  |
+|                  | record set      | records                                                      | 与分区对应的数据                          |
+
+消息累加器RecordAccumulator 中的消息是以＜分区， Deque<ProducerBatch>>的形式进行缓存的， 之后由Sender线程转变成<Node, List<ProducerBatch>>的 形式，针对每个Node, Sender线程在发送消息前会将对应的List< ProducerBatch>形式的内容转 变成ProduceRequest 的具体结构。 List<ProducerBatch>中的内容首先会按照主题名称进行分 类 （对应ProduceRequest中的域topic) , 然后按照分区编号进行分类（对应ProduceRequest中 的域parti巨on), 分类之后的ProducerBatch集合就对应ProduceRequest中的域record_set。 从另 一 个角度来讲， 每个分区中的消息是顺序追加的， 那么在客户端中按照分区归纳好之后就 可以省去在服务端中转换的操作了， 这样将负载的压力分摊给了客户端， 从而使服务端可以专 注于它的分内之事， 如此也可以提升整体的性能。
+
+如果参数acks设置非0值， 那么生产者客户端在发送ProduceRequest请求之后就需要（异 步）等待服务端的响应ProduceResponse。对ProduceResponse而言，V6版本中ProduceResponse 的组织结构如图6-4所示
+
+![image-20210904132602866](Kafka.assets/image-20210904132602866.png)
+
+| 域(Field)类型       | 类型   | 描述(Description)                                            |
+| ------------------- | ------ | ------------------------------------------------------------ |
+| throttle_time_ms    | int32  | 如果超过了配额(quota)限制则需要延迟该请求的处理 时间。 如果没有配置配额， 那么该字段的值为0 |
+| responses           | array  | 代表ProudceResponse中要返回的数据集合。 同样按照主 题分区的粒度进行划分， 注意这个域是一个数组类型 |
+| topic               | string | 主题名称                                                     |
+| partition_responses | array  | 主题中所有分区的响应， 注意这个域也是 一个数组类型           |
+| partitlon           | int32  | 分区编号                                                     |
+| error code          | int16  | 错误码，用来标识错误类型。目前版本的错误码有74种， 具体可以参考： http://katka.apache.org/protocol.html# protocol_error_codes |
+| base offset         | int64  | 消息集的起始偏移量                                           |
+| log_append_ time    | mt64   | 消息写入broker端的时间                                       |
+| log_start_offset    | int64  | 所在分区的起始偏移量                                         |
+
+我们再来了解 一下拉取消息的协议类型， 即FetchRequest/ Fetch_Response, 对应的api_key= 1
+
+下面就以最新版本(V8)的结构为例来做细致的讲解.FetchRequest的组织结构如图6-5所 示
+
+![image-20210904133229045](Kafka.assets/image-20210904133229045.png)
+
+| 域(Field)             | 类 型  | 描述(Description)                                            |
+| --------------------- | ------ | ------------------------------------------------------------ |
+| replica_id            | int32  | 用来指定副本的brokerld, 这个域是用于follower副本向 leader副本发起FetchRequest请求的，对于普通消费者客 户端而言，这个域的值保持为-1 |
+| max_wait_time         | int32  | 和消费者客户端参数fetch.max.wait.ms对应，默认值为 500, 具体参考3.2.11节的内容 |
+| mm_bytes              | int32  | 和消费者客户端参数fetch.min.bytes对应，默认值为I, 具体参考3.2.11节的内容 |
+| max_bytes             | int32  | 和消费者客户端参数 fetch.max.bytes 对应， 默认值为 52428800, 即50MB, 具体参考3.2.11节的内容 |
+| isolation_level       | int8   | 和消费者客户端参数isolation.level对应， 默认值为 "read_uncommitted" , 可选值为"read_com血tted" , 这两个值分别对应本 域的0和1的值，有关isolation.level 的细节可以参考3.2.11节的内容 |
+| session id            | int32  | fetch session的心详细参考下面的释义                          |
+| epoch                 | int32  | fetch session的epoch纪元，它和 sees1on_1d 一 样都是fetch session的元 数据， 详细参考下面的释义 |
+| topics                | array  | 所要拉取的主题信息， 注意这是 个数组类型                     |
+| topic                 | string | 主题名                                                       |
+| partition             | int32  | 分区名                                                       |
+| fetch offset          | int64  | 指定从分区的哪个位置开始读                                   |
+| log_start_offset      | int64  | 该域专门用于follower副本发起的FetchRequest 请求，用 来指明分区的起始偏移量。对于普通消费者客户端而言 这个值保持为-1 |
+| max_bytes             | int32  | 注意在最外层中也包含同样名称的域， 但是两个所代表 的含义不同， 这里是针对单个分区而言的， 和消费者客 户端参数 max.partition.fetch.bytes对应， 默认值为 1048576, 即1MB, |
+| forgotten_topics_data | array  | 数组类型， 指定从fetch sess10n中指定要去除的拉取信 息， 详细参考下面的释义 |
+| topic                 | string | 主题名称                                                     |
+| partitions            | array  | 数组类型， 表示分区编号的集合                                |
+
+不管是follower副本还是普通的消费者客户端， 如果要拉取某个分区中的消息， 就需要指 定详细的拉取信息，也就是需要设定partition、 fetch offset、 log start offset 和max_bytes这4个域的具体值，那么对每个分区而言，就需要占用4B+8B+8B+=24B的空间。一般情况下， 不管是follower副本还是普通的消费者， 它们的订阅信息是长期固定.如果可以将这24KB的状态保存起来， 那么就可以节省这部分所占用的 带宽 。
+
+Kafka从1.1.0版本开始针对FetchRequest引入了session_id、epoch和 forgotten_topics_data等域，session_id和epoch确定 条拉取链路 的 fetch session,当session建 立或变更时会发送全量式的 FetchRequest, 所谓的全量式就是指请求体中包含 所有需要拉取的 分区信息；当session稳定时则会发送增 量式的Fetc hRequest请求，里面 的topics域为空， 因 为topics域的内容已经被缓存在了session链路的两侧。 如 果需要从当前fetc h session中取消 对某些分区的拉取订阅， 则可以使用forgotten_topics_data 字段来实现。
+
+与FetchRequest对应的FetchResponse的组织结构(V8版本）
+
+![image-20210904134023140](Kafka.assets/image-20210904134023140.png)
+
+FetchResponse结构中的域也 很多， 它主要分为4层， 第1层包含throttle_time_ms、 error_code、 session_id和 responses, 前面3 个域都见过， 其中session_id和 Fetc hReq u est中的 session_id 对应。 responses是 一 个数组类型， 表示响应的具体内容， 也 就是 Fetc hResp onse结构中的第 2 层， 具体地细化到每个分区的响应。 第3层中包含分区的元 数据信 息(partition、 error code 等 ） 及具 体 的 消息内 容 (record set) ,aborted_transactions和事务相关。
+
+### 10.2 时间轮
+
+Kafka中 存在大量的延时操作， 比如延时生产、 延时 拉取和延时 删除等 。Kafka并没有使用 一 JDK自带的Timer 或DelayQueue来实现 延时的功能，而是基于时间轮的概念自定义 实现了 个 用延时 功能的定时器(SystemTimer)
+
+Kafka中的时间轮(TimingWheel)是 个存储定时任务的环形队列， 底层 采用 数组 实现， 数组中的每个元素可以存放 一 个定时任务列表(TimerTaskList)。TimerTaskList 一 是 个环形的双向链表，链表中的每 一 项 表示的都是定时任务项(TimerTaskEntry), 其中封装 了真正的定时任务(TimerTask)。
+
+时间轮由多个时间格组成， 每个时间格代表当前时间轮的基本时间跨度(tickMs)。 时间 轮的时间格个数 是固定的，可用wheelSize来表示， 那么 整个时间轮的总体时间跨度(interval) 可以通过公式tickMs X wheelSize计算得出。 时间轮 还有 一 个表 盘指针(currentTime) , 用来表 示 时间轮当前所处的时间，currentTime 是tick Ms的整 数倍。 currentTime可以将整个时间轮划分 为到期部分和未到期部分， currentTime当前指向的时间格也属千到期部分， 表示刚好到期， 需 要 处 理此 时间格 所对 应的TimerTaskList中的所有任务。
+
+![image-20210904134404741](Kafka.assets/image-20210904134404741.png)
+
+若时间轮的 tickMs为lms且wheelSize等于20, 那么可以计算得出总体时间跨度interval 为20ms。 初始情况下表盘指针cur r entTime指向时间格O, 此时有 一 个定时为2ms的任务插进 来会存放到时间格为2的TimerTaskList中。 随着时间的不断推移， 指针CWTentTime不断向前 推进， 过了2ms之后， 当到达时间格2时， 就需要将时间格2对应的TimeTaskList 中的任务进 行相应的到期操作。 此时若 又有 一 个定时为 8ms 的任务插进来， 则会存放到时间格 10 中， cur r entTime再过 8ms后会指向时间格10。 如果同时有 一 个定时为19ms的任务插进来怎么办？ 新来的TimerTaskEntry会复用原来的TimerTaskList , 所以它会插入原本已经到期的时间格1。 总之， 整个时间轮的总体跨度是不变的， 随着指针cur r entTime的不断推进， 当前时间轮所能处 理的时间段也在不断后移， 总体时间范围在 cWTentTime和CWTentTime+interval之间 。
+
+如果此时有 一个定时为350ms的任务该如何处理？
+
+第 一层的时间轮 tickMs = 1ms、wheelSize = 20、inter 第二层的时间轮的 tickMs为第 一 层时间轮的int erval, 即20ms。每 一 层时间轮的wheelSize是固 定的， 都是 20, 那么第二层的时间轮的总体时间跨度interval为400ms。以此类推 ， 这个 400ms 也是第三层的 tickMs的大小， 第三层的时间轮的总体时间跨度为8000ms。
+
+复用之前的案例，第 一层的时间轮 tickMs = 1ms、wheelSize = 20、inter 第二层的时间轮的 tickMs为第 一 层时间轮的int erval, 即20ms。每 一 层时间轮的wheelSize是固 定的， 都是 20, 那么第二层的时间轮的总体时间跨度interval为400ms。以此类推 ， 这个 400ms 也是第三层的 tickMs的大小， 第三层的时间轮的总体时间跨度为8000ms。
+
+![image-20210904134710524](Kafka.assets/image-20210904134710524.png)
+
+### 10.3 延时操作
+
+如果在使用生产者客户端发送消息的时候将acks参数设置为-1, 那么就意味着需要等待 ISR集合中的所有副本都确认收到消息之后才能正确地收到响应的结果， 或 者捕获超时异常。
+
+在Kafka中有多种延时操作， 比如前面提及的延时生产， 还有延时拉取(DelayedFetch)、 延时数据删除(DelayedDeleteRecords)等。 延时操作需要延时返回响应的结果， 首先它必须有
+
+一 个超时时间(d e layMs) , 如果在这个超时时间内没有完成既定的任务， 那么就需要强制完成 以返回响应结果给客户端。
+
+延时操作创建之后会被加入延时操作管理器( DelayedOperationPurgatory)来做专门 的 处 理。 延时操作有可能会超时， 每个延时操作管理器都会配备一 个定时器 (SystemTimer) 来做 超时管 理， 定时器的底层就是采用时间轮 (TimingWheel)实现的
+
+图 6-12描绘了客户端在请求写入消息到收到响应结果的过程中与延时生产操作相关的细 节， 在了解相关的概念之后应该比较容易理解： 如果客户端设置的acks参数不为-1, 或者没 有成功的消息写入， 那么就直接返回结果给客户端， 否则就需要创建延时生产操作并存入延时 操作管理器， 最终要么由外部事件触发， 要么由超时触发而执行
+
+![image-20210904135345527](Kafka.assets/image-20210904135345527.png)
+
+有延时生产就有延时拉取.Kafka选择了延时操作来处理这种情况。Kafka 在处理拉取请求时，会先读取 一 次日志文件， 如果收集不到足够多(fetchMinBytes , 由参数fetch.min.bytes配置，默认值为l)的消息， 那么就会创建 一 个延时拉取操作(DelayedFetch)以等待拉取到足够数量的消息。 当延时拉取操 作执行时， 会再读取 一次日志文件， 然后将拉取结果返回给follower副本。
+
+延时拉取操作同样是由超时触发或外部事件触发而被执行的。 超时触发很好理解， 就是等 到超时时间之后触发第二次读取日志文件的操作。 外部事件触发就稍复杂了 一 些， 因为拉取请 求不单单由follower副本发起， 也可以由消费者客户端发起， 两种情况所对应的外部事件也是 不同的。 如果是follower副本的延时拉取， 它的外部事件就是消息追加到了leader副本的本地 日志文件中；如果是消费者客户端的延时拉取， 它的外部事件可以简单地理解为HW的增长。
+
+### 10.4 控制器
+
+在 Kafka 集群中会有 一 个或多个broker, 其中有 一 个broker 会被选举为控制器(Kafka Controller), 它负责管理整个集群中所有 分区 和副本的状态。 当某个分区的leader副本出现故 障时， 由控制器负责为该分区选举 新的 leader副本。 当检测到某个分区的 ISR集合发生变化时， 由控制器负责通知所有broker更 新其元数据信息。当使用kafka-to pics.sh脚本为某个topic 增加 分区数量时， 同样还是由控制器负责 分区的重新 分配。
+
+**选举和异常恢复**
+
+Kafka中的控制器选举工作依赖于ZooKeeper, 成功竞选为控制器的brok er会在ZooKeeper 中创建/controller这个临时(EPHEMERAL)节点， 此临时 节点的内容参考如下：
+
+`{"version": 1, "broker id": 0,"timestamp":"1529210278988"}`
+
+在任意时刻， 集群中有且仅有 一 个控制器。 每个broker启动的时候会去尝试读取 /controller节点的broker过的值，如果读取到brokerid的值不为-1, 则表示已经有其 他broker 节点成功竞选为控制器， 所以当前broker就会放弃竞选；如果ZooKeeper 中不存在 /controller节点， 或者这个节点中的数据异常， 那么就会尝试去创建/controller节点。 当前broker去创建节点的时候， 也有可能其他broker同时去尝试创建这个节点， 只有创建成功 的那个broker才会成为控制器， 而创建失败的broker竞选失败。 每个broker都会在内存中保存 当前控制器的brokerid值， 这个值可以标识为activeControllerld 。
+
+ZooKeeper 中还有 一 个与控制器有关的/controller_epoch节点， 这个节点是待久 (PERSISTENT)节点， 节点中存放的是 一 个整型的controller— epoch值。controllerepoch用于记录控制器发生变更的次数， 即记录当前的控制器是第几代控制器， 我们也可以称 之为 "控制器的纪元"
+
+具备控制器身份的broker需要比其他普通的broker多 一 份职责， 具体细节如下：
+
+监听 分区相关的变化。 为ZooKeeper中的/admin/reassign_par巨巨ons节点注 册 PartitionReassignmentHandler, 用来处理分区重 分配的动作。 为 ZooKeeper 中的 红sr_change_noti丘cation节点注册IsrChangeNotificetionHandler, 用来处理 ISR 集合变更的动作。 为ZooKeeper中的/admin/preferred-rep巨ca-electio n节 点添加PreferredReplicaElectionHandler, 用来处理优先副本的选举动作。
+
++  监 听 主 题 相 关 的 变 化 。 为 ZooKeeper 中 的 /brokers/ topics 节 点 添 加 TopicChangeHandler , 用 来 处理主 题 增 减 的 变 化； 为 ZooKeeper 中的/admin/ delete_topics节点添加TopicDeletionHandler, 用来处理删除主题的动作。
+
++ 监听broker相关的变化。 为ZooKeeper中的/brokers/ids节点添加BrokerChangeHandler, 用来处理broker增减的变化。
++  从ZooKeeper中读取获取当前所有与主题、 分区及broker有关的信息并进行相应的管 理。 对所有主题对应的 ZooKeeper 中的/brokers/topics/<topic＞节点添加 PartitionModificationsHandler, 用来监听主题中的分区分配变化。
++  启动并管理分区状态机和副本状态机。
++  更新集群的元数据信息。
++ 如果参数auto.leader.rebalance.enable设置为 true, 则还会开启 一 个名为 "auto-leader-rebalance-task"的定时任务来 负责维护 分区的优先副本的均衡 。
+
+![image-20210904140120956](Kafka.assets/image-20210904140120956.png)
+
+/controller 节点的数据发生变化时， 每个 broker 都会更新自身内存中保存 的 activeControllerld 。 如果 broker 在数据变更前是控制器， 在数据变更后自身的 brok erid 值与 新的 activeControllerld 值不 一 致， 那么就需要 “ 退位 ” ， 关闭相应的资源， 比如关闭状态机、 注销相应的监听器等。 有可能控制器由于异常而下线， 造成 /controller 这个临时节点被自 动删除； 也有可能是其他原因将此节点删除了。
+
+当 /controller 节点被删除时， 每个 broker 都会进行选举， 如果 broker 在节点被删除前 是控制器， 那么在选举前还需要有 一 个 “ 退位 ” 的动作。 如果有特殊需要， 则可以手动删除 /controller 节点来触发新 一 轮的选举。 当然关闭控制器所对应的 broker, 以及手动向 /controller 节点写入新的 brokerid 的所对应的数据， 同样可以触发新 一 轮的选举。
+
+### 10.5 分区Leader选举
+
+分区leader副本的选举由控制器负责具体实施。当创建分区（创建主题或增加分区都有创 建分区的动作） 或分区上线（比如分区中原先的 leader副本下线， 此时分区需要选举 一 个新的 leader 上线来对外提供服务）的时候都 需要执行 leader 的选举动作， 对应的选举策略为 OftlinePartitionLeaderElectionStrategy。这种策略的基本思路是按照AR 集合中副本的顺序查找 第 一 个存活的副本，并且这个副本在JSR集合中。 一个分区的AR集合在分配的时候就被指定， 并且只要不发生重分配的情况，集合内部副本的顺序是保待不变的，而分区的ISR集合中副本 的顺序 可能会改变。
+
+### 10.6 参数解密
+
+**broker.id**
+
+broker . id 是 broker 在启动之前必须设定 的参数之一， 在 Kafka 集群中 ，每个 broker 都 有唯一 的 id （ 也可以记作 brokerld ）值用来区分彼此 。 broker 在启动时会在 ZooKeeper 中的 /brokers/ ids 路径下创建一个以当前 brokerId 为名称的虚节点， broker 的健康状态检查就依 赖于此虚节点。 当 broker 下线时， 该虚节点会自动删除， 其他 broker 节点或客户端通过判断 /brokers/ids 路径下是否有此 broker 的 brokerld 节点来确定该 broker 的健康状态。
+
+可以通过 broker 端的配置文件 config/server.properties 里的 broker . i d 参数来配置 broke rid ， 默认情况下 broker.id 值为 l 。在 Kafka 中 ， brokerld 值必须大于等于 0 才有可能 正常启动 ，但这里并不是只能通过配置文件 con fig/ server. properties 来设定这个值 ，还可以通过meta.properties 文件或 自动生成功能来实现。
+
+broker 在成功启动之后在每个日志根 目录下都会有一个 meta.properties 文件 。
+
+(1)如果 log . dir 或 log.dirs 中配置了多个日志根目录，这些日志根目录中的 meta. properties 文件所配置的 broker . id 不 一致则会抛出 InconsistentBrokerldException 的 异常。
+
+( 2 ）如果 config/ server. poperties 配置文件里配置 的 br oker ． id 的值和 meta.properties 文 件里的 broker . id 值不一致 ，那么同样会抛出 InconsistentBrokerldException 的异常 。
+
+( 3 ）如 果 config/server.properties 配置文件中井未配置 broker ．工d 的值，那么就以
+
+meta.properties 文件中的 broker . id 值为准。
+
+( 4 ）如果没有 meta.properties 文件，那么在获取合适的 broker . id 值之后会创建一个新
+
+的 meta.prop巳rties 文件并将 broker . id 值存入其中。
+
+如果 config/ server. properties 配置文件中并未配置 broker . id ，并且日志根目录中也没有 任何 meta.properties 文件（ 比如第－次启动时 ） ，那么应该如何处理呢 ？
+
+还提供 了另外两个 broker 端参数 ： broker . id . generation . enable 和 reserved . broker . max . i d 来配合生成新的 brokerId 。 broker . id . geηeratio口 . enable 参数用来配置是否开启自动生成 brokerId 的功能，默认情况下为廿ue， 即开启此功能 。自 动生 成的 brokerId 有一个基准值，即自动生成的 brokerId 必须超过这个基准值，这个基准值通过 reserverd . broker.max . id 参数配置，默认值为 1000 。 也就是说，默认情况下自动生成的 broker Id 从 1001 开始 。
+
+**bootstrap.server**
+
+bootstrap.servers 不仅是 Kafka Producer、 Kafka Consumer 客户端 中的必备参数 ，而 且在 Kafka Connect、 Kafka Streams 和 KafkaAdminClient 中都有涉及 ， 是一个至关重要 的参数。
+
+我们一般可以简单地认为 bootstrap.servers 这个参数所要指定的就是将要连接的 Kafka 集群的 broker 地址列表。不过从深层次的意义上来讲，这个参数配置的是用来发现 Kafka 集群元数据信息的服务地址。为了更加形象地说明问题，我们先来看一下图 6- 19 。
+
+![image-20210904141015675](Kafka.assets/image-20210904141015675.png)
+
+客户端 KafkaProducer1 与 Kafka Cluster 直连，这是客户端给我们的既定印象，而事实上客 户端连接 Kafka 集群要经历以下 3 个过程，如图 6-19 中的右边所示。
+
+Cl ）客户端 KafkaProducer2 与 bootstrap.servers 参数所指定的 Server 连接，井发送 MetadataRequest 请求来获取集群的元数据信息 。
+
+(2) Server 在收到 MetadataRequest 请求之后，返回 MetadataResponse 给 KafkaProducer2, 在 MetadataResponse 中包含了集群的元数据信息。
+
+(3 ）客户端 KafkaProducer2 收到的 MetadataResponse 之后解析出其中包含的集群元数据信 息，然后与集群中的各个节点建立连接，之后就可以发送消息了。
+
+### 10.7 服务端参数列表
+
+| 参数名称                                | 默认值                               | 参数释义                                                     |
+| --------------------------------------- | ------------------------------------ | ------------------------------------------------------------ |
+| auto.create.topcs.enable                | true                                 | 是否开启自动创建主题的功能，详细 参考4.1.1节                 |
+| auto.leader.rebalance.enable            | true                                 | 是否开始自动leader再均衡的功能， 详细参考4.3.l节             |
+| background.threads                      | 10                                   | 指定执行后台任务的线程数                                     |
+| compression.typedelete.topic.enable     | producer                             | 消息的压缩类型。Kafka支持的压缩 类型有Gzip、Snappy、LZ4等。 默 认值"producer"表示根据生产者使 用的压缩类型压缩，也就是说，生产 者不管是否压缩消息，或者使用何种 压缩方式都会被broker端继承。 "uncompressed"表示不启用压缩， 详细参考5.2.3节 |
+| leader.imbalance.check.interval.seconds | 300                                  | 检查 leader是否分布不均衡的周期， 详细参考4.3 I节            |
+| leader.imbalance.per.broker.percentage  | 10                                   | 允许leader不均衡的比例，若超过这 个 值就会触发leader再均衡的操作 |
+| log.flush.interval.messages             | 9223372036854775807 (Long.MAX_VALUE) | 如果日志文件中的消息在存入磁盘 前的数量达到这个参数所设定的阙 值时，则会强制将这些刷新日志文件 到磁盘中。 |
+| log.flush.interval.ms                   | null                                 | 刷新日志文件的时间间隔。如果没有配置 这个值， 则会依据log.flush. scheduler.mterval.ms参数设置的值 来运作 |
+| log.flush.scheduler.interval.ms         | 9223372036854775807 (Long.MAX VALUE) | 检查日志文件 是否需要刷新的时间 间隔                         |
+| log.retention.bytes                     | -1                                   | 日志文件的最大保留大小（分区级 别， 注意与log.segment.bytes的区 别）， 详细参考5.4.1节 |
+| log.retention.hours                     | 168(7天）                            | 日志文件的留存时间， 单位为小时， 详细参考5.4.1节            |
+| log.retention.mmutes                    | null                                 | 日志文件的留存时间， 单位为分钟， 详细参考5.4.1节            |
+| log.retention.ms                        | null                                 | 日志文件的留存时间， 单位为毫秒。 log.retent10n. {hours血inuteslms}这三 个参数 中log.retention.ms的优先级 最高， log.retention.minutes次之， log.retention.hours 最低， 详细参考 5.4.1节 |
+| log.roll.hours                          | 168 (7天）                           | 经过多长时间之后会强制新建一个 日志分段，默认值为7天，详细参考 53节 |
+| log.roll.ms                             | null                                 | 同上， 不过单位为毫秒。 优先级比 log.roll.hours要高， 详细参考53节 |
+| log.segement.bytes                      | 1073741824 (1GB)                     | 日志分段文件的最大值，超过这个值 会强制创建 一个新的日志分段，详细 参考5.3节 |
+| min.insync.rephcas                      | 1                                    | ISR 集合中最少的副本数， 详细参考 8.1.4节                    |
+| num.io.threads                          | 8                                    | 处理请求的线程数， 包含磁盘I/O                               |
+| num.network.threads                     | 3                                    | 处理接收和返回响应的线程数                                   |
+| log.cleaner.enable                      | true                                 | 是否开启日志清理的功能，详细参考 54节                        |
+| log cleaner.mm.cleanable.ratio          | 05                                   | 限定可执行清理操作的最小污浊率， 详细参考5.4.2节             |
+| log.cleaner.threads                     | 1                                    | 用千日志清理的后台线程数                                     |
+| log.cleanup.poltcy                      | delete                               | 日志清理策略， 还有 一个可选项为 compact, 表示日志压缩， 详细参考 54节 |
+| log.index.interval.bytes                | 4096                                 | 每隔多少个字节的消息量写入就添 加 一条索引， 详细参考5.4.2节 |
+| log.mdex.size.max.bytes                 | 10485760 (10MB)                      | 索引文件的最大值                                             |
+| log.message.format.version              | 2.0-IVl                              | 消息格式的版本                                               |
+| log.message.timestamp.type              | CreateTime                           | 消息中的时间戳类型另一个可选项 为LogAppendTime。             |
+| log.retent1on.check.interval.ms         | 300000 (5分钟）                      | 日志清理的检查周期， 详细参考 5.4.1节                        |
+| num.partitions                          | I                                    | 主题中默认的分区数， 详细参考 4.1.1节                        |
+| reserved.broker.max.id                  | 1000                                 | broker.id能配置的最大值， 同时 reserved.broker.max.id+ I也是自动创 建broker.id值的起始大小，详细参考 6.5.1节 |
+| create.top1c.policy.class.name          | null                                 | 创建主题时用来验证合法性的策略， 这个参数配置的是一 个类的全限定 名，需要实现org.apache.kafka.server. policy.CreateTop1cP0!1cy接口， 详细 参考4.2.2节 |
+| broker.id.generation.enable             | true                                 | 是否开启自动生成broker.id的功能， 详细参考6.5.1节            |
+| broker.rack                             | null                                 | 配置 broker 的机架信息， 详细参考 4.1.2节                    |
 
 ## 11_Kafka工作流程
 
@@ -1835,16 +2098,6 @@ kafka-console-producer --broker-list localhost:9092 --topic test
 
 
 ## 23_Kafka 高效读写数据
-
-### 1.顺序写磁盘
-
-Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是一直追加到文件末端，为顺序写。 官网有数据表明，同样的磁盘，顺序写能到 600M/s，而随机写只有 100K/s。这与磁盘的机械机构有关，顺序写之所以快，是因为其**省去了大量磁头寻址的时间**。
-
-### 2.零拷贝/零复制
-
-![img](Kafka学习.assets/14.png)
-
-- NIC network interface controller 网络接口控制器
 
 ### 3.Zookeeper在Kafka中的作用
 
