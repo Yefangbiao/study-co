@@ -1345,6 +1345,229 @@ Kafka消息格式的第一个版本通常称为v0版本， 在Kafka0.10.0之前�
 
 v0版本中 一个消息的最小长度(RECORD_OVERHEAD_VO)为crc32+ magic + attributes+ keylength+valuelength= 4B+1B+1B+4B+4B=14B。 也就是说， v0版本中一条消息的最小长度为14B, 如果小于这个值， 那么这就是 一 条破损的消息而不被接收。
 
+#### 2.2 v1版本
+
+Kafka从0.10.0版本开始到0.11.0版本之前所使用的消息格式版本为v1, 比v0版本就多了
+
+一个timestamp字段， 表示消息的时间戳
+
+![image-20210904081228765](Kafka.assets/image-20210904081228765.png)
+
+vl版本的magic字段的值为1。 vl版本的attributes字段中的 低3位和v0版本的 样， 还是表示压缩类型而 第4个位(bit)也被利 用了起来：0表示timestamp类型为CreateTime, 而1表示timestamp类型 为LogAppendTime, 其他位保留。 timestamp类型由broker 端参 数log.message.timestamp.type来配置， 默认值为CreateTime, 即采用生产者创建消息时的时间戳
+
+v1版本的消息的最小长度(RECORD_OVERHEAD_V1)要比v0版本的大8个 字节， 即 22B。
+
+#### 2.2 消息压缩
+
+而Kafka实现的压缩方式是将多条消息 一起进行压缩，这样可以保证较好的压缩 效果。
+
+Kafka日志中使用哪种压缩方式是通过参数compression.type来配置的， 默认值为
+
+"producer", 表示保留生产者使用的压缩方式。这个参数还可以配置为"gz ip" "snappy" "lz4", 分别对应GZIP、 SNAPPY、 LZ4这3种压缩算法。如果参数compression.type配置为 "uncompressed" , 则表示不压缩。
+
+以上都是针对消息未压缩的情况， 而当消息压缩时是将整个消息集进行压缩作为内层消息 (inner message),内层消息整体作为外层 (wrapper message) 的value
+
+压缩后的 外层消息(wrapper message)中的key为null, 所以图5-5左半部分没有画出key 字段，value字段中保存的是多条压缩消息 (inner message , 内层消息）， 其中 Record表示的 是从crc32到value的消息格式。 当生产者创建压缩消息的时候， 对内部压缩消息设置的 offset从0开始为每个 内部消息分配offset
+
+![image-20210904081922714](Kafka.assets/image-20210904081922714.png)
+
+其实每个从生产者发出的消息集中的消息offset都是从0开始的，当然这个offset不能直接 存储在日志文件中， 对offset 的转换是在服务端进行的， 客户端不需要做这个工作。 外层消息 保存了内层消息中最后 一 条消息的绝对位移(absolute offset) , 绝对位移是相对于整个分区而 言的。
+
+参考图5-6, 对于未压缩的情形， 图右内层消息中最后 一 条的offset理应是1030, 但被压 缩之后就变成了5, 而这个1030被赋予给了外层的offset 。 当消费者消费这个消息集的时候， 首先解压缩整个消息集， 然后找到内层消息中最后 一 条消息的inner offset, 根据如下公式找到 内层消息中最后 一 条消息前面的消息的absolute offset (RO表示Relative Offset, IO表示I n ner Offset, 而AO表示Absolute Offset) :
+
+![image-20210904082253317](Kafka.assets/image-20210904082253317.png)
+
+RO = IO of a message - IO of the last message 
+
+AO = AO Of Last Inner Message + RO
+
+在讲述v1 版本的消息 时， 我们了解到v1 版本比 v0 版的消息多了 一 个timestamp字段。 对于压缩的情形， 外层消息的timestamp设置为： • 如果timestamp类型是CreateTime, 那么设置的是内层消息中最大的时间戳。
+
+如果timestamp类型是LogAppendTime, 那么设置的是Kafka服务器当前的时间戳。 内层消息的timestamp设置为：
+
+• 如果外层消息的timestamp类型是CreateTime, 那么设置的是生产者创建消息 时的 时间戳。
+
+• 如果外层消息的timestamp类型是LogAppendTime, 那么所有内层消息的时间戳都 会被忽略。 对attributes 字段而言 ， 它的 times tiamp 位只在外层消息中 设置 ， 内层消息中的 一 timestamp类型 直都是CreateTime 。
+
+#### 2.3 变长字段
+
+Kafka从0.11 .0版本开始所使用的消息格式版本为v2, 这个版本的消息相比v0和 v1的版本 而言改动很大 ， 同时还参考了Protocol Buffe而引入了变长整型(Varints)和ZigZag编码。Varints 是使用 一 个或多个字节来序列化整数的 一 种方法。 数值越小 ， 其占用的字节数就越 少。 Varints中的每个字节都有 一 个位于最高位的msb位(most significant bit) , 除最后 一 个字 节 外， 其余msb位都设置为1, 最后 一 个字节的msb位为0。这个nisb位 表示其后的字节 是否和当前字节起来表示同一个整数.除msb位外， 剩余的7位用于存储数据本身.一个字节 8 位可以表示256个值， 所以称为Ba se 256.而 这里 只能用 7位表示，2的7次方即128。Var ints 中采用的是小端字节序 ，即最小的字节放在最前面。
+
+举个例子， 比如数字1, 它只占 一 个字节 ， 所以msb位为0:
+
+`0000 0001`
+
+再举
+
+一 个复杂点的例子，比如数 字 300:`1010 1100 0000 0010`.300的二进制表示原本为0000 0001 0010 1100 = 256+32+8 +4=300, 那么为什么300的变长 表示为上面的这种形式？
+
+首先去掉每个字节的msb位， 表示如下：
+
+`1010 1100 0000 0010`->`010 1100 000 0010`
+
+如前所述， 使用的是小端字节序的布局方式 ， 所以这里两个字节的位置需要翻转`010 llOO 000 0010`->`000 0010 010 llOO (翻转）`->`000 0010 ++ 010 1100`->`0000 0001 0010 1100 = 256+32+8+4=300`
+
+#### 2.4 v2版本
+
+v2 版本中消息集称为 Record Batch，而不是先前的 Message Set,其内部也包含了一条或多条消息，消息的格式参见图 5-7 的中部和右部。在消息压缩的情形下， Record Batch Header 部 分（参见图 5-7 左部， 从 first offset 到records coun t 字段）是不被压缩的，而被压缩的是 records 字段中的所有内容。。 生产者客户端中的 ProducerBatch 对应这里的RecordBatch,而 ProducerRecord对应这里的 Record.
+
+![image-20210904083619442](Kafka.assets/image-20210904083619442.png)
+
+先讲述消息格式 Record 的关键字段， 可以看到内部宇 段大量采用了 Varints ， 这样 Kafka 可 以根据具体的值 来确定需要几个 字节来保存。 v2 版本的消息格式 去掉了 ere 字段， 另外增加了 length （消息总长度〉、 timestamp delta （时间戳增量）、 offset delta （位移增量）和 headers 信息，并且 attributes 字段被弃用了
+
++ length ：消息总长度 。 
++ attributes ： 弃用， 但还是在消息格 式中占据 1B 的大小， 以备未来的格式 扩展。 
++ timestamp delta ： 时间戳增量。 通常一个 time stamp 需要占用 8 个字节， 如果像 这里一样保存与 RecordBatch 的起始时间戳的 差值， 则可以进一步节 省占用的字节数 。 
++ offset delta ： 位移增量。 保存与 RecordBatch 起始位移的差值 ， 可以节省占用的字节数。
++ headers ：这个字段用来支持应用级别的扩展，而不需要像 v0 和 v1' 版本一样不得不 将一些应用级别的属性值嵌入消息体 。 Header 的格式如图 5-7 最右部分所示，包含 key 和 value ，一个 Record 里面可以包含 0 至多个 Header
+
+对于 v1 版本的消息，如果用户指定的 times tamp 类型是 LogAppendTime 而不是 CreateTime ，那么消息从生产者进入 broker 后， times tamp 字段会被更新，此时消息的 crc 值将被重新计算，而此值在生产者中己经被计算过一次 。 再者， broker 端在进行消息格式转换 时（比如 v1 版转成 v0 版的消息格式〉也会重新计算 crc 的值 。 在这些类似的情况下，消息从 生产者到消费者之间流动时， crc 的值是变动的，需要计算两次 crc 的值，所以这个宇段的设 计在 v0 和 v1 版本中显得比较“鸡肋 .v2版本中crc转移到了RecordBatch中
+
+v2 版本对消息集（ RecordBatch ）做了彻底的修改， 参考图 5-7 最左部分，
+
++ first offset ：表示当前 RecordBatch 的起始位移 。
++ l ength ：计算从 partition leade repoeh 字段开始到末尾的长度。
++ partition leader epoeh ：分区 leader 纪元，可以看作分区 leader 的版本号或更 新次数，
++ magic ：消息格式的版本号
++ attributes ：消息属性，注意这里占用了两个字节 。 低 3 位表示压缩格式，可以参 考 vO 和 vl ；第 4 位表示时间戳类型；第 5 位表示此 RecordBatch 是否处于事务中，。0 表示非事务， l1表示事务 。 第 6 位表示是否是控制消息 （ ControlBatch ），。表示非控 制消息，而 1 表示是控制消息，控制消息用来支持事务功能
++ last offset delta: RecordBatch 中最后一个 Record 的 offset 与first offset 的差值 。 主要被 broker 用 来确保 RecordBatch 中 Record 组装的正确性
++ first timestamp: RecordBatch 中第一条 Record 的时间戳。
++ max timestamp: RecordBatch 中最大的时间戳， 一般情况下是指最后一个 Record 的时间戳，和 last offset delta 的作用 一样，用来确保消息组装的正确性
++ producer id: PID ，用来支持幂等和事务
++ producer epoch ：和 producer id 一样，用来支持幕等和事务
++ first sequence ：和 producer id producer epoeh 一样,支持幂等性和事务
++ records count : RecordBatch 中 Record 的个数。
+
+![image-20210904084516274](Kafka.assets/image-20210904084516274.png)
+
+
+
+![image-20210904084525739](Kafka.assets/image-20210904084525739.png)
+
+![image-20210904084536660](Kafka.assets/image-20210904084536660.png)
+
+#### 2.5 日志索引
+
+偏移量索引文件用来建立消息偏移量（ offset ）到物理地址之间的映射关系，方便快速定位消息 所在的物理文件位置；时间戳索引文件则根据指定的时间戳（ timestamp ）来查找对应的偏移量 信息。
+
+Kafka 中的索引文件以稀疏索引（ sparse index ）的方式构造消息的索引，它并不保证每个 消息在索引文件中都有对应的索引 项。 每当写入一定量（由 broker 端参数 log.index. interval.bytes 指定，默认值为 4096 ，即 4KB ）的消息时，偏移量索引文件和时间戳索引 文件分别增加一个偏移量索引项和时间戳索引项，增大或减小 log.index.interval.bytes 的值，对应地可以增加或缩小索引项的密度。
+
+稀疏索引通过 MappedByteBuffer 将索引文件映射到内存中，以加快索引的查询速度。偏移量索引文件中的偏移量是单调递增的，查询指定偏移量时，使用二分查找法来快速定位偏移量的位置，如果指定的偏移量不在索引文件中，则会返回小于指定偏移量的最大偏移量 。 时间戳 索引文件中的时间戳也保持严格的单调递增，查询指定时间戳时，也根据二分查找法来查找不 大于该时间戳的最大偏移量，至于要找到对应的物理文件位置还需要根据偏移量索引文件来进 行再次定位。稀疏索引的方式是在磁盘空间、内存空间、查找时间等多方面之间的一个折中。
+
+本章开头也提及日志分段文件达到一定的条件时需要进行切分，那么其对应的索引文件也 需要进行切分。日志分段文件切分包含以下几个条件，满足其一 即可 。
+
+( 1) 当前日志分段文件的大小超过了 broker 端参数 log.segment . bytes 配置的值。log.segment.bytes 参数的默认值为 1073741824 ，即 1GB 。
+
+(2 ）当前日志分段中消息的最大时间戳与当前系统的时间戳的差值大于 log.roll .ms或 log.roll.hours 参数配置的值。如果同时配置了 log.roll.ms 和 log.roll.hours 参数，那么 log.roll.ms 的优先级高。 默认情况下，只配置了 log.ro ll.hours 参数，其值为 168,即 7 天。
+
+(3 ）偏移量索引文件或时间戳索引文件的大小达到 broker 端参数 log . index.size .max. bytes 配置的值。 log.index . size .max ·. bytes 的默认值为 10485760 ，即 10MB 。
+
+(4 ）追加的消息的偏移量与当前日志分段的偏移量之间的差值大于 Integer.MAX_VALUE, 即要追加的消息的偏移量不能转变为相对偏移量（ offset - baseOffset > Integer.MAX_VALUE ）。
+
+对非当前活跃的日志分段而言，其对应的索引文件内容己经固定而不需要再写入索引项， 所以会被设定为只读 。 而对当前活跃的日志分段 (activeSegment ）而言，索引文件还会追加更多的索引项，所以被设定为可读写。在索引文件切分的时候， Kafka 会关闭当前正在写入的索 引文件并置为只读模式，同时以可读写的模式创建新的索引文件，索引文件的大小由 broker 端参数log . index.size .max.bytes配置。
+
+##### 2.5.1 偏移量索引
+
+偏移量索引项的格式如图 5-8 所示。每个索引项占用 8 个字节，分为两个部分。 
+
+( 1 ) relativeOffset：相对偏移量，表示消息相对于 baseOffset 的偏移量，占用 4 个字节 ， 当前索引文件的文件名即为 baseOffset 的值。 
+
+( 2) position：物理地址，也就是消息在日志分段文件中对应的物理位置，占用 4 个字节。
+
+![image-20210904085458693](Kafka.assets/image-20210904085458693.png)
+
+消息的偏移量（ offset ）占用 8 个字节，也可以称为绝对偏移量 。 索引项中没有直接使用绝
+
+对偏移量而改为只占用 4 个字节的相对偏移量 CrelativeOffset =offset - baseOffset），这样可以 减小索引文件占用的空间。举个例子 ， 一个日志分段的 baseOffset 为 32 ，那么其文件名就是 00000000000000000032.log, offset 为 35 的消息在索引文件中的 relativeOffset 的值为 35-32=3 。
+
+##### 2.5.2 时间戳索引
+
+时间戳索引项的格式如图 5-11 所示
+
+![image-20210904085636665](Kafka.assets/image-20210904085636665.png)
+
+每个索 引 项占用 12 个字节， 分为两个部分。
+
+( 1 ) timestamp ： 当前日志分段最大的时间戳。 ( 2) relativeOffset：时间戳所对应的消息的相对偏移量。 时间戳索引文件中包含若干时间戳索引项 ， 每个追加的时间戳索引项中的 timestamp 必须 大于之前追加的索引项的 timestamp ，否则不予追加 。 如果 broker 端参数 log . message . timestamp . type 设置为 LogAppendTime， 那么消息的时间戳必定能够保持单调递增；
+
+与偏移量索 引 文件相似， 时间戳索 引 文件大小必须是索引项大小（ 12B ）的整数倍， 如果 不满足条件也会进行裁剪。 同样假设 broker 端参数 log . index . size . max.bytes 配置为 67 , 那么对应于时间戳索引文件， Kafka 在内部会将其转换为 60 。
+
+#### 2.6 日志清理
+
+Kafka 将 消息存储在磁盘中，为了 控制磁盘占用空间的不断增加就需要对消息做 一 定的清 理操作。 Kafka 中 每 一 个分区副本都对应 一 个 Log, 而Log又可以分为多个日志分段， 这样也 便于日志的清理操作。 Kafka提供了两种日志清理策略。
+
+(1)日志删除(LogReten tion): 按照 一 定的保留策略直接删除不符合条件的日志分段。
+
+(2)日志压缩 (LogCompaction): 针对每个消息的key进行整合， 对千有相同 key的不 同value 值， 只保留 最后 一 个版本。
+
+我们可以通过broker端参数log.cleanup.policy来设置 日志清理策略，此参数的默认 值为" delete " , 即采用日志删除的清理策略。 如果要采用日志压缩的清理策略， 就需要将 log.cleanup.policy设置为"compact" , 并且还需要将log.cleaner.enable (默认值 为true )设定为true。 通过将log.cleanup.policy参数 设置为"del ete,compact" , 还可以 同时支持日志删除和日志压缩两种策略。 日志清理的粒度可以控制到主题级别， 比如与 log.cleanup.policy 对应的主题级别的参数为cleanup.policy
+
+##### 2.6.1日志删除
+
+在Kafka 的日志管理器中会有一 个专门的日志删除任务来周期性地检测和删除不符合 保留条 件的日志分段文件，这个周期可以通过broker端参数`log.retention.check.interval.ms`配置
+
+来配置 ，默认值为3 00000, 即5分钟。当前日志分段的保留策略有3种：基于时间 的保留策略、基于日志大小的保留策略 和基于日志起始偏移量的保留策略。
+
+1. 基于时间：日志删除任务会检查当前日志文件中是否有保留时间超过设定的阙值(retentionMs)来寻 找可删除的日志分段文 件集合(deletableSegments) , 如图5-13 所示。retentionMs 可以通过 broker 端参数log.retention.hours、log.retentien.minutes和log.retention.ms来配 置 ， 其 中 log.retention.ms 的优先级最 高 ， log.retention.minutes 次之， log.retention.hours最低。 默认情况下只配置 了log.retention.hours参数， 其值为 168, 故默认情况下日志分段文件的保留时间为7天。
+
+![image-20210904090201357](Kafka.assets/image-20210904090201357.png)
+
+查找过期的日志分段文件，并不是简单地根据日志分段的最近修改时间 lastModifiedTime 来计算的， 而是根据日志分段中最大的时间戳largestTimeStamp来计算的。 因为日志分段的 lastModifiedTime可以被有意或无意地修改， 比如执行了touch操作 ， 或者分区副本进行了重新 分配， lastModifiedTime并不能真实地反映出日志分段在磁盘的保留时间。要获取日志分段中的 最大时间戳largestTimeStamp的值， 首先要查询该日志分段所对应的时间戳索引文件，查找 时 间戳索引文件中最后 一 条索引项， 若最后 一 条索引项的时间戳字段值 大于0,则取其值， 否则 才设置为最近修改时间 lastModifiedTime 。
+
+若待删除的日志分段的总数等于该日志文件中所有的日志分段的数量， 那么说明所有的日 志分段都已过期， 但该日志文件中还要有 一 个日志分段用来接收消息的写入， 即必须要 保证有 一个新的日志分段作为 个活跃的日志分段activeSegment, 在此种情况下， 会先切分出 一 activeSegment, 然后执行删除操作。
+
+删除日志分段时，首先会从Log对象中所维护日志分段的跳跃表中移除待删除的日志分段， 以保证没有线程对这些日志分段进行读取操作。 然后将日志分段所对应的所有文件添加上 ".deleted"的后缀（当然也包括对应的索引文件）。 最后交由 一 个以"delete-file"命名的延迟 任务来删 除这些 以 " . de l eted "为 后 缀的 文 件 ， 这个任务的 延 迟执 行 时间可 以 通 过 file.delete.delay.ms参数来调配， 此参数的默认值为60000, 即1 分钟。
+
+2. 基于日志大小
+
+日志删除任务会检查当前日志的大小是否超过设定的阀值 (retentionSize)来寻找 可删除的 日志分段的文件集合(deletableSegments), 如图5-14所示。retentionSize可以通过 broker端参 数log.retention.by 七 es来配置 ，默认值为-1 , 表示无穷大。注意log.re tention.bytes 配置的是Log中所有日志文件的总大小， 而不是单个日志分段（确切地说应该为log 日志文件） 的大小。
+
+![image-20210904090441339](Kafka.assets/image-20210904090441339.png)
+
+3. 基于日志起始偏移量
+
+般情况下， 日志文件的起始偏移量 logStartOffset等于第 一 个日志分段的baseOffset
+
+基于日志起始偏移量的保留策略的判断依据是某日志分段的下一 个日志分段的起始偏移量 baseOffset 是否小于等于logStartOffset, 若是， 则可以删除此日志分段。假设 logStartOffset等于25
+
+(1 )从头开始遍历每个日志分段 ， 日志分段1 的下 一 个日志分段的起始偏移量为11, 小 于logStartOffset的大小， 将日志分段 l加入deletableSegments。
+
+(2)日志分段2的下 一 个日志偏移量的起始偏移量为23, 也小于logStartOffset的大小， 将日志分段2页 加入deletableS egments。
+
+(3)日志分段3的下 一 个日志偏移量在logStartOffset的右侧， 故从日志分段3开始的所 有日志分段都不会 加入deletableSeg ments。
+
+![image-20210904090647064](Kafka.assets/image-20210904090647064.png)
+
+##### 2.6.2 日志压缩
+
+Kafka中的Log Compaction是指在默认的日志删除(Log Retention)规则之外提供的 一 种 清理过时数据的方式。 如图5-16所示， Log Compaction对千有相同key的不同value值， 只保 留最后 一个版本。
+
+![image-20210904090738344](Kafka.assets/image-20210904090738344.png)
+
+Log Compaction执行前后， 日志分段中的每条消息的偏移量和写入时的偏移量保待 一 致。 Log Compaction 会生成新的日志分段 文件， 日志分段中每条消息的物理位置会重新按照新文件 来组织。 Log Compaction执行过后的偏移量不再是连续的， 不过这并不影响日志的查询。
+
+我们知道可以通过配置log.dir或log.dirs参数来设置Kafka 日志的存放目录， 而每 一个日志目录下都有 一 个名为"cleaner-offset-checkpoint" 的文件， 这个文件就是清理检查点文 件， 用来记录每个主题的每个分区中已清理的偏移量。 通过清理检查点文件可以将L og 分成两 个部分
+
+通过检查点cleaner checkpoint来划分出 一个 已经清理过的clean部分 和一 个还未清理过的 dirty 部分。 在日志清理的同时， 客户端也可以读取日志中的消息。 dirty 部分的消息偏移量是逐 一递增的， 而 clean 部分的消息偏移量是断续的，如果客户端总能赶上 dirty部分， 那么它就能读取日志的所有消息， 反之就不可能读到全部的消息。
+
+![image-20210904090909840](Kafka.assets/image-20210904090909840.png)
+
+如图5-19所示，假设所有的参数配置都 为默认值，在Log Compaction之前checkpoint的初 始值为 0。 执行第 一 次 Log Compaction 之 后， 每个非活跃的日志分段的大小都有所缩减， checkpoint的值也有所 变化。 执行第二次Log Compaction时会组队成[0.4GB, 0.4GB]、[0.3GB, 0.7GB]、[0.3GB]、[1GB]这4个分组，并且从第二次Log Compaction 开始还会涉及墓碑 消息的 清除。同理，第三次Log Compaction过后的情形可参考图5-19的尾部。Log Compaction过程中 会将每个日志分组中需要保留的消息复制到 一 个以".clean" 为后缀的临时文件中， 此 临时文件 以当前 日志分组中第 一 个日志分段的文件名命名， 例如00000000000000000000.log.clean。 Log Compaction过后 将".clean"的文件修改为".swap"后缀的文件，例如： 00000000000000000000. log.swap。 然后 删除原本的日志文件， 最后才把文件的".swap" 后缀去掉。 整个过程中的索引
+
+文件的变换也是如此， 至此 一 个完整Log Compaction操作才算完成。
+
+![image-20210904091441135](Kafka.assets/image-20210904091441135.png)
+
+#### 2.7 磁盘存储
+
+Kafka 在设计时采用了文件追加的方式来写 入消息， 即只能在日志文件的尾部追加新的消 息， 并且也不允许修改己写入的消息， 这种方式属于典型的顺序写盘的操作， 所以就算K afka 使用磁盘作为存储介质， 它所能承载的吞吐量也不容小觑。 
+
+页缓存：页缓存是操作系统实现的 一 种主要的磁盘缓存， 以此用来减少对磁盘I/0 的操作。 具体 来说， 就是把磁盘中的数据缓存到内存中， 把对磁盘的访间变为对内存的访问。 为了弥补性 “ 能上的差异， 现代操作系统越来越 激进地 ” 将内存作为磁盘缓存， 甚至会非常乐意将所有 可用的内存用作磁盘缓存， 这样当内存回收时也几乎没有性能损失， 所有对于磁盘的读写也 将经由统 一 的缓存。
+
+#### 2.8 零拷贝
+
+所谓的零拷贝是指将数据直接从磁盘文件复制到网卡设备中，而不需要经由应用程序之 手 。
+
 ## 10_Kafka入门_回顾
 
 略

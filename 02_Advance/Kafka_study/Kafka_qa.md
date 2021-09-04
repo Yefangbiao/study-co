@@ -48,3 +48,5 @@ zookeeper.connect=hadoop102:2181,hadoop103:2181,hadoop104:2181
 # 2.面试问题
 
 分区数增加吞吐量下降：https://www.cnblogs.com/felixzh/p/12000883.html
+
+https://www.hyperxu.com/2020/01/01/kafka-3/
