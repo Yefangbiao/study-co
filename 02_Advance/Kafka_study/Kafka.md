@@ -2277,19 +2277,79 @@ Importance:	high
 
 
 
-## 16_数据一致性问题
+## 16_Kafka应用
 
-![img](Kafka学习.assets/12-8682555.png)
+### 16.1消费组管理
 
-- LEO：（Log End Offset）每个副本的最后一个offset
-- HW：（High Watermark）高水位，指的是消费者能见到的最大的 offset， ISR 队列中最小的 LEO
+在 Kafka 中，我们可以通过 kafka-consumer-groups.sh 脚本查看或变更消费组的信息 。 我们 可以通过 list 这个指令类型 的参数来罗列出当前集群 中所有的消费组名称
 
-### 1.follower 故障和 leader 故障
+![image-20210905110756334](Kafka.assets/image-20210905110756334.png)
 
-- **follower 故障**：follower 发生故障后会被临时踢出 ISR，待该 follower 恢复后， follower 会读取本地磁盘记录的上次的 HW，并将 log 文件高于 HW 的部分截取掉，从 HW 开始向 leader 进行同步。等该 follower 的 LEO 大于等于该 Partition 的 HW，即 follower 追上 leader 之后，就可以重新加入 ISR 了。
-- **leader 故障**：leader 发生故障之后，会从 ISR 中选出一个新的 leader，之后，为保证多个副本之间的数据一致性， 其余的 follower 会先将各自的 log 文件高于 HW 的部分截掉，然后从新的 leader同步数据。
+kafka-consumer-groups.sh 脚本还可以配合 describe 这个指令类型的参数来展示某一个消 费组的详细信息， 不过要完成此功能还需要配合 group 参数来一 同实现
 
-注意： 这只能保证副本之间的数据一致性，并不能保证数据不丢失或者不重复。
+![image-20210905110814002](Kafka.assets/image-20210905110814002.png)
+
+消费组一共有 Dead、 Empty 、 PreparingRebalance 、 CompletingRebalance 、 Stable 这几种状 态，正常情况下， 一个具有消费者成员的消费组的状态为 Stable。 我们可以通过 state 参数来 查看消费组当前的状态 ， 示例如下
+
+![image-20210905110842664](Kafka.assets/image-20210905110842664.png)
+
+我们还可以通过 members 参数罗列出消费组内的消费者成员信息，参考如下：
+
+![image-20210905110855210](Kafka.assets/image-20210905110855210.png)
+
+如果在此基础上再增加一个 verbose 参数，那么还会罗列出每个消费者成员的分配情况， 如下所示 。
+
+![image-20210905110903586](Kafka.assets/image-20210905110903586.png)
+
+我们可 以通过 delete 这个指令类型的参数来删除一个指定的消费组，不过如果消费组中 有消费者成员正在运行，则删除操作会失败
+
+![image-20210905110917693](Kafka.assets/image-20210905110917693.png)
+
+### 16.2 消费位移管理i
+
+kafka-consumer-groups.sh 脚本还提供了重置消费组内消费位移的功能，具体是通过 reset-off sets 这个指令类型的参数来实施 的。，不过实现这一功能的前提是消费组内没有正 在运行的消费者成员。
+
+![image-20210905111003937](Kafka.assets/image-20210905111003937.png)
+
+可 以 通过将一all-t。 pies 修改为一t。 pie 来实现更加细粒度的消费位移的重量 ， all -t。 pies 参数指定了消费组中所有主题，而 topic 参数可 以指定j在个主题 ， 甚至可 以是 主题中的若平分区 。下面的示例将主题 topic-monitor 分区 2 的消费位移置为分区 的末尾：
+
+![image-20210905111023005](Kafka.assets/image-20210905111023005.png)
+
+![image-20210905111041736](Kafka.assets/image-20210905111041736.png)
+
+### 16.3 手动删除消息
+
+下 面使用 kafka-delete-records. sh 脚本来删除部分消息 。 在执行具体的删除动作之前需要 先配置一个 JSON 文件 ，用来指定所要删除消息的分区及对应的位置 。 我们 需要分别删除主 题 topic-monitor 下 分区 。 中偏移 量为 l O 、分区 l 中偏移量 为 l I 和分区 2 中偏移量 为 1 2 的 消息：
+
+![image-20210905111150365](Kafka.assets/image-20210905111150365.png)
+
+之后将这段内容保存到文件中， 比如取名为 delete.json, 在此之后， 我们就可以通过 kafka-delete-records.sh 脚本中的 offset-json-file 参数来指定这个 JSON 文件。具体的删除 操作如下：
+
+![image-20210905111201161](Kafka.assets/image-20210905111201161.png)
+
+### 16.4 Kafka Connect
+
+Kafka Connect 是 一 个工具， 它为在 Kafka 和外部数据存储系统之间移动数据提供了 一 种可 靠的且可伸缩的实现方式。 Kafka Connect 可以简单快捷地将数据从 Kafka 中导入或导出， 数据 范围涵盖关系型数据库、 日志和度痲数据、 Hadoop 和数据仓库、 NoSQL 数据存储、 搜索索引 等。 相对于生产者和消费者客户端而言， Kafka Connect 省掉了很多开发的工作
+
+Kafka Connect 有两个核心概念： Source 和 Sink。参考图 9-1, Source 负责导入数据到 Kafl<a, Sink 负责从 Kafka 导出数据， 它们都被称为 Connector C连接器）。
+
+![image-20210905111749827](Kafka.assets/image-20210905111749827.png)
+
+在 Kafka Connect 中还有两个重要的概念： Task 和 Worker。 Task 是 Kafka Connect 数据模型 的主角，每 一 个 Connector 都会协调 一 系列的 Task 去执行任务， Connector 可以把 一 项工作分割 成许多 Task, 然后把 Task 分发到各个 Worker 进程中去执行（分布式模式下）， Task 不保存自 己的状态信息， 而是交给特定的 Kafka 主题去保存。 Connector 和 Task 都是逻辑工作单位， 必 须安排在进程中执行， 而在 Kafka Connect 中， 这些进程就是 Worker 。
+
+Kafka Connect 提供了以下特性 。
+
+• 通用性：规范化其他数据系统与 Kafka 的集成， 简化了连接器的开发、 部署和管理。
+
+• 支待独立模式 (standalone) 和分布式模式 (distributed) 。
+
+• REST 接口：使用 REST API 提交和管理 Connector。
+
+• 自动位移管理：自动管理位移提交， 不需要开发人员干预， 降低了开发成本。
+
+• 分布式和可扩展性： Kafka Connect 基于现有的组管理协议来实现扩展 Kafka Connect 集群。
+
+• 流式计算／批处理的集成。
 
 
 
