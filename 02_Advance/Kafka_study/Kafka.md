@@ -1837,15 +1837,245 @@ Cl ）客户端 KafkaProducer2 与 bootstrap.servers 参数所指定的 Server �
 | broker.id.generation.enable             | true                                 | 是否开启自动生成broker.id的功能， 详细参考6.5.1节            |
 | broker.rack                             | null                                 | 配置 broker 的机架信息， 详细参考 4.1.2节                    |
 
-## 11_Kafka工作流程
+## 11_Kafka:深入客户端
 
-![img](Kafka学习.assets/05.png)
+### 11.1 分区分配策略
 
-+ topic 是逻辑上的概念，而 partition 是物理上的概念，每个 partition 对应于一个 log 文件，该 log 文件中存储的就是 producer 生产的数据。（topic = N partition，partition = log）
+Kafka提供了消费者客户端参数partition.assignment.strategy 来 设 置消费者与订阅主题之间的分区分配策略。 默认情况下， 此参数的值为org.apache.kafka. clients. consumer.RangeAssignor, 即采用 RangeAssignor分配策略。 除此之外， Kafka还提供了另 外 两 种分配策略： RoundRobinAssignor和StickyAssignor 。
 
-+ Producer 生产的数据会被不断追加到该log 文件末端，且每条数据都有自己的 offset。 consumer组中的每个consumer， 都会实时记录自己消费到了哪个 offset，以便出错恢复时，从上次的位置继续消费。（producer -> log with offset -> consumer(s)）
+`config.Consumer.Group.Rebalance.Strategy=sarama.BalanceStrategyRoundRobin`
+
+1. RangeAssignor分配策略
+
+RangeAssignor 分配策略的原理是按照消费者总数和分区总数进行整除运算 来 获得 一 个跨 度， 然后将分区按照跨度进行平均分配， 以保证分区尽可能均匀地分配给所有的消费者。
+
+RangeAssignor策略会将消费组内所有订阅这个主题的消费者按照名称的字典序排 序，然后为每个消费者划分固定的分区范围，如果不够平均分配，那么字典序靠前 的消费者会 被多分配 一 个分区。
+
+2. RoundRobinAssignor分配策略
+
+RoundRobinAssi gn or 分配策略的原理是将消费组内所有消费者及消费者订阅的所有主题的分 区按照字典序排序，然后通过轮询方式逐个将分区依次分配给每个消费者。
+
+如果同 一 个消费组内所有的消费者的订阅信息都是相同的， 那么RoundRobinAssi gn or 分配
+
+策略的分区分配 会是均匀的。举个例子， 假设消费组中有2个消费者 co 和CL都订阅了主题 tO和tl, 并且每个主题都有3个分区， 那么订阅的所有分区可以标识为：tOpO、 tOpl、t0p2、tlpO、 tlpl、tlp2。最终的分配结果为：
+
+消费者CO: tOpO、t0p2、tlpl 消费者Cl: tOpl、tlpO、tlp2
+
+举个例子， 假设消费组内有3个消费者(CO、 Cl和C2), 它们共订阅了3个主题(tO、 tl 、 t2), 这 3个主题分别有1 、 2、 3个分区， 即整个消费组订阅了tOpO、 tlpO、 tlpl、 t2p0 、 t2pl、 t2p2这6个分区。 具体而言， 消费者 co 订阅的是主题tO, 消费者Cl 订阅的是主题tO和tl, 消费者C2 订阅的是主题tO、ti和t2, 那么最终的分配结果为：
+
+消费者CO: tOpO 消费者Cl: tlpO 消费者C2: tlpl 、七 2p0 、 t2pl 、 t2p2
+
+3. StickyAssignor分配策略
+
+我们再来看 一 下StickyAssignor分配策略，  从0.11.x版本开始引入这种分配策略， 它主要有两个目的
+
+ (1)分区的分配要尽可能均匀。
+
+(2)分区的分配尽可能与上次分配的保待相同。
+
+假设消费组内有3个消费者(CO、 Cl和C2), 它们都订阅了4个主题(tO、 tl、 t2、 t3), 并且每个主题有2个分区。 也就是说， 整个消费组订阅了tOpO、 tOpl、 tlpO、 tlpl、 t2p0 、 t2pl、 t3p0 、 t3pl这8个分区。 最终的分配结果如 下：
+
+消费者CO: 七 OpO、tlpl 、 t3p0 消费者Cl: tOpl、t2p0、t3pl 消费者C2: tlpO、t2pl
+
+这样初看上去似乎与采用RoundRobinAssi gn or分配策略所分配的结果相同， 但事实是否真 的如此呢？再假设此时消费者 Cl脱离了消费组， 那么消费组就会执行再均衡操作， 进而消费 分区会重新分配。 如果采用RoundRobinAssignor 分配策略， 那么此时的分配结果如下：
+
+消费者CO: tOpO、tlpO、t2p0、t3p0 消费者C2: tOpl、tlpl、t2pl、t3pl
+
+如分配结果所示，RoundRobinAssignor分配策略会按照消费者 co 和C2进行重新轮询分配。 如果此时使用的是StickyAssignor分配策略，那么分配结果为：
+
+消费者CO: tOpO、tlpl 、 七3p0、t2p0 消费者C2: tlpO、t2pl、tOpl、t3pl
+
+可以看到分配结果中保留了上 一 次分配中对消费者 co 和C2的所有分配结果，并将原来消 “ 费者Cl的 负担 “ 分配给了剩余的两个消费者 co 和C2, 最终 co 和C2的分配还保持了均衡。
+
+到目前为止，我们分析的都是消费者的订阅信息都是相同的情况，我们来看 一 下订阅信息 不同的清况下的处理。
+
+举个例子，同样消费组内有3个消费者(CO、Cl和C2) , 集群中有3个主题(tO、tl和 t2) , 这3个主题分别有1 、 2、 3个分区。也就是说，集群中有tOpO、 tlpO、 tlpl、 t2p0 、 t2pl、 t2p2这6个分区。 消费者 co 订阅了主题tO, 消费者Cl订阅了主题tO和tl, 消费者C2订阅了 主题tO、ti和t2。
+
+消费者CO: tOpO 消费者Cl: 七lpO、tlpl 消费者C2: 七2p0、t2pl、t2p2
+
+4. 自定义分区分配策略
+
+读者不仅可以任意选用Kafka提供的3种分配策略， 还可以自定义分配策略来实现更多可 选的功能。
+
+实现接口
+
+```go
+// BalanceStrategy is used to balance topics and partitions
+// across members of a consumer group
+type BalanceStrategy interface {
+	// Name uniquely identifies the strategy.
+	Name() string
+
+	// Plan accepts a map of `memberID -> metadata` and a map of `topic -> partitions`
+	// and returns a distribution plan.
+	Plan(members map[string]ConsumerGroupMemberMetadata, topics map[string][]int32) (BalanceStrategyPlan, error)
+
+	// AssignmentData returns the serialized assignment data for the specified
+	// memberID
+	AssignmentData(memberID string, topics map[string][]int32, generationID int32) ([]byte, error)
+}
+```
+
+### 11.2 消费者协调器和组协调器
+
+消费者协调器和组协调器的概念是针对新版的消费者客户端 而言的，Kafka建立之初并没 有它们。
+
+每个消费组(<group>)在Zoo Keeper中都维护了 个/consumers/<group>/ids 路径， 在此路径下使用临时节点记录隶属于此消费组的消费者的唯 一 标识 (consumerldString)，其中 consumer.id是旧版消费者客户端中的配置，相当于新版客户端中的 client.id。
+
+参考图7-4, 与/consumers/<group>/ids 同级的还有两个节点： owners和 offsets, /consumers/<group>/owner 路径下记录了分区和 消费者的对应关系，/consumers/ <group>/offsets路径下记录了此消费组 在 分区中对应的消费位移 。
+
+![image-20210905091109447](Kafka.assets/image-20210905091109447.png)
+
+每个broker、 主题和 分区在ZooKeeper中也都 对应 一 个路径 ： /brokers/ids/<id>记录 了host、port及分配在 此broker上的主题 分区列表； /brokers/topics/<topic>记录了每 个分区的 leader 副本、ISR集合等信息。/brokers/topics/<top乓>/partitions/ <parti巨on>/state 记录了当前leader副本、leader—epoch等信息
+
+每个消费者在启动时都会在/consumers/<group>八ds和/brokers/ids路径 上注册 一个监听器。当/consumers/<group>/ids路径下的子节点发生变化时，表示消费组 中的消 费者发生了变化；当/brokers/ids路径下的子节点发生变化时，表示broker出现了增减。这 样通过ZooKeeper 所提供的Watcher, 每个消费者就可以监听消费组和Kafka集群的状态了
+
+#### 11.2.1再均衡的原理
+
+新版的消费者客户端对此进行了重新设计，将全部消费组分成多个子集， 每个消费组的子 集在服务端对应 一 个GroupCoordinator对其进行管理， GroupCoordinator是Kafka服务端中用于 管理消费组的组件。而消费者客户端中的 ConsumerCoordinator组件负责与GroupCoordinator 进 行交互。
+
+ConsumerCoordinator与GroupCoordinator之间最重要的职责就是负责执行消费者再均衡的 操作，包括前面提及的分区分配的工作也是在再均衡期间完成的 。就目前而言， 一 共有如下几 种情形会触发再均衡的操作：
+
+• 有新的消费者加入消费组 。
+
+• 有消费者宅机下线。消费者并不 一 定需要真正下线， 例如遇到长时间的 GC、网络延 迟导致消费者长时间未向GroupCoordinator发送心跳等情况时，GroupCoordinator会认 为消费者已经下线。
+
+• 有消费者主动退出消费组（发送LeaveGroupRequest 请求）。比如客户端调用了 unsubscrible()方法取消对某些主题的订阅 。
+
+• 消费组所对应的GroupCoorinator节点发生了变更。
+
+• 消费组内所订阅的任一 主题或者主题的分区数量发生变化 。
 
 
+
+1.第一阶段 (FIND_COORDINATOR)
+
+消费者需要确定它所属的消费组对应的GroupCoordinator所在的 broker,并创建与该broker 相互通信的网络连接 。如果消费者已经保存了与消费组对应的GroupCoordinator节点的信息， 并且与它之间的网络连接是正常的，那么就可以进入第二阶段。否则， 就需要向集群中的某个 节点发送FindCoordinatorRequest请求来查找对应的GroupCoordinator,这里的 “ 某个节点 ” 并 非是集群中的任意节点，而是负载最小的节点
+
+FindCoordinatorRequest请求体中只有两个域(Field): coordinator_key  和 coordinator_ type。coordina or— key在这里就是消费组的名称，即 groupid, coordinator_type置为 0。 这个FindCoordinatorRequest请求还会在Kafka事务（参考7.4.3 节）中提及，为了便于说明问题，这里我们暂且忽略它。
+
+![image-20210905091358616](Kafka.assets/image-20210905091358616.png)
+
+Kafka 在收到 FindCoordinatorRequest 请求之后，会根据 coordinator— key(也就是 gr oupld)查找对应的GroupCoordinator节点，如果找到对应的GroupCoordinator则会返回其相 对应的 node_id、host和port信息。
+
+具体查找GroupCoordinator的方式是先根据消费组groupld的哈希值计算_consumer—offsets 中的分区编号
+
+2. 第二阶段(JOIN_GROUP)
+
+在成功找到消费组所对应的GroupCoordinator 之后 就进入加入消费组的阶段， 在此阶段的 消费者会向GroupCoordinator发送JoinGroupRequest请求，并处理响应。
+
+如图 7-6 所示， JoinGroupR巳quest 的结构包含多个域 ：
+
+group_id 就是消费组的 id ，通常也表示为 groupld。 
+
+sessioηtimout 对应消费端参数 session.timeout.ms ，默认值为 10000 ，即 10 秒 。 GroupCoordinator 超过 session_timeout 指定的时间内没有收到心跳报文则 认为此消 费者已经下线。 
+
+rebalance timeout 对应消费端参数 max .poll . interva l.ms ， 默认值 为 300000 ，即 5 分钟 。表示当消费组再平衡的时候， GroupCoordinator 等待各个消费者 重新加入的最长等待时间 。 
+
+memb er_i d 表示 GroupCoordinator 分配给消费者 的 id 标识。 消 费者第一次发送 J oinGroupRequest 请求的时候此字段设置为 nulla  pr o toc o l_type 表示消费组实现的协议 ，对于消费者而言此字段值为“ consumer”。
+
+![image-20210905091854393](Kafka.assets/image-20210905091854393.png)
+
+**选举消费纽的 leader**
+
+GroupCoordinator 需要为消费组内的消费者选举出一个消费组的 leader，这个选举的算法也 很简单，分两种情况分析。如果消费组内还没有 leader，那么第一个加入消费组的消费者即为 消费组的 leader。如果某一时刻 leader 消费者由于某些原因退出了消费组，1 那么会重新选举一 个新的 leader
+
+**第三阶段（ SYNC GROUP)**
+
+leader 消 费者根据在第二阶段中选举 出来的分区分配策略来实施具体的分区分配， 在此之 后需要将分配的方案同步给各个消费者， 此时 leader 消费者并不是直接和其余的普通消费者同 步分配方案， 而是通过 GroupCoordinator 这个“中间人”来负 责转发同步分配方案的
+
+![image-20210905092103256](Kafka.assets/image-20210905092103256.png)
+
+**消费纽元数据信息**
+
+我们知道消费者客户端提交的消费位移会保存在 Kafka 的 consumer offsets 主题中，这里 Ea I 3b e也一样，只不过保存的是消费组的元数据信息 （ GroupMetadata ） 。具体来说，每个消费组的元 数据信息都是一条消息，不过这类消息并不依赖于具体版本的消息格式，因为它只定义了消息 中的 key 和 value 字段的具体内容，
+
+![image-20210905092250882](Kafka.assets/image-20210905092250882.png)
+
+protocol type ：消费组实现的协议，这里的值为“ consumer”。 
+
+gene rat tion：标识当前消费组的年代信息，避免收到过期请求的影响。 
+
+protocol ： 消费组选取的分区分配策略。
+
+ leader ： 消费组的 leader 消费者的名称。 
+
+members ： 数组类型，其中包含了消费组的各个消费者成员信息，图 7- 15 中右边部分 就是消费者成员的具体信息，每个具体字段都 比 较容易辨别， 需要着重说明的是 subsc ription 和 assignment 这两个字段 ， 分别代码消费者的订阅信息和分配信 患。
+
+**第四阶段（ HEARTBEAT)**
+
+进入这个阶段之后，消 费组中的所有消费者就会处于正常工作状态。在正式消费之前 ，消 费者还需要确定拉取消息的起始位置。假设之前已经将最后的消费位移提交到了 GroupCoordinator， 并且 GroupCoordinator 将其保存到了 Kafka 内 部的一consumer_offsets 主题中 ， 此时消费者可以通过 OffsetFetchRequest 请求获取上次提交的消 费位移并从此处继续消费 。
+
+### 11.3 __consumer_offsets 剖析
+
+位移提交的内容最终会保存到 Kafka 的内部主题 consumer offsets 中
+
+一般情况下， 当集群中第一 次有消费者消费消息时会自动创建主题 consumer offsets ，不 过它的副本因子还受 offsets. topic.replication. factor 参数的约束， 这个参数的默认值为 3 （下载安 装的包中此值可能为 1 ），分区数可以通过 offsets.topic.num.partitions 参数设置， 默认为 50 。客 户端提交消费位移是使用。 他etCommitRequest 请求实现的， OffsetCommitRequest
+
+![image-20210905093130686](Kafka.assets/image-20210905093130686.png)
+
+retention time 表示当前提交的消费位移所能保留的时长， 不过对于消费者而言 这个值保持为 I 。也就是说， 按照 broker 端的配置 o ffsets . retention . minutes 来确定 保留时长 。 offsets . retention . minutes 的默认值为 10080 ，即 7 天，超过这个时间后消 费位移的信息就会被删除（使用墓碑消息和日志压缩策略） 。
+
+同消费组的元数据信息 一 样，最终提交的消费位移也会以消息的形式发送至主题 _consumer_ offsets ，与消费位移对应的消息也只定义了 key 和 value 字段的具体内容，它不依 赖于具体版本的消息格式，以此做到与具体的消息格式无关 。
+
+图 7”17 中展示了消费位移对应的消息内容格式，上面是消息的 key，下面是消息的 value 。 可以看到 key 和 value 中都包含了 version 宇段，这个用来标识具体的 key 和 value 的版本信 息，不同的版本对应的内容格式可能并不相同 。就目前版本而言 ， key 和 value 的 version 值 都为 l 。
+
+value 中包含了 5 个字段，除 version 宇段外，其余的 offset 、 metadata 、 commit times tamp、 expire timestamp 宇段分别表示消费位移、自定义的元数据信息、位移提交 到 Kafka 的时间戳、消费位移被判定为超时的时间戳 。
+
+![image-20210905093339183](Kafka.assets/image-20210905093339183.png)
+
+在处理完消费位移之后， Kafka 返回 OffsetCommitResponse 给客户端
+
+![image-20210905093358226](Kafka.assets/image-20210905093358226.png)
+
+### 11.4 事务
+
+一般而言， 消息中间件的消息传输保障有 3 个层级， 分别如下。
+
+( 1 ) at most once：至多 一次。 消息可能会丢失， 但绝对不会重复传输。
+
+( 2) at least once： 最少一次。 消息绝不会丢失， 但可能会重复传输。
+
+ (3) exactly once ：恰好一次。 每条消息肯定会被传输一次且仅传输一次。
+
+Kafka 从 0.11.0.0 版本开始引 入了幂等和事务这两个特性，以此来实现 EOS ( exactly once semantics ，精确一次处理语义） 。
+
+##### 11.4.1幂等
+
+所谓的幕等，简单地说就是对接口的多次调用所产生的结果和调用 一次是一致的 。开启幕等性功能的方式很简单，只需要显式地将生产者客户端参数 enab le.idempotence 设置为 true 即可（这个参数的默认值为 false ）
+
+为了 实现生产者 的幕等性， Kafka 为此引入 了 producer id（ 以下简称 PID ）和序列号（ sequence number ）这两个概念
+
+分别对应 v2 版的日志格式中 RecordBatch 的 producer id 和 first seqence 这两个宇段
+
+。每个新的生产 者实例在初始化的时候都会被分配一个 PID ， 这个 PID 对用户而言是完全透明的 。 对于每个 PID, 消息发送到的每一个分区都有对应的序列号，这些序列号从 0 开始单调递增。生产者每发送一 条消息就会将＜PID ， 分区＞对应的序列号的值加 lo
+
+broker 端会在内存中为每一对＜PID ，分区＞维护一个序列号。对于收到的每一条消息，只有 当它的序列号的值（ SN new ）比 broker 端中维护的对应的序列号的值（ SN old ）大 1 （ 即 SN new = SN old + 1 ）时， broker 才会接收它
+
+##### 11.4.2 事务
+
+事务可 以保证对多个分区写入操作的原子性。操作的原子性是指多个操作要么全部成功，要么全部失败，不存在部分成功、 部分失败的可能。
+
+为了实现事务，应用程序必须提供唯一 的 transactionalld ，这个 transactionalld 通过客户端 参数 transact ional.id 来显式设置
+
+transactionalld 与 PID 一一对应 ，两者之间所不同的是 transactionalld 由用户显式设置
+
+另 外，为了保证新的生产者启动后具有相同 transactionalld 的旧生 产者能够立即失效，每个生产者通过 transactionalld 获取 PID 的 同时，还会获取一个单调递增的 producer epoch
+
+为了实现事务的功能， Kafka还引入了事务协调器(TransactionCoordinator)来负责处理事 一 一 一 一 务， 这 点可以类比 下组协调器(GroupCoordinator)。 每 个生产者都会被指派 个特定的 TransactionCoordinator, 所有的事务逻辑包括分派PID等都是由TransactionCoordinator来负责 实施的。TransactionCoordinator会将事务状态持久化到内部主题_transaction_state中。 下面就 以最复杂的consume-transform-produce的流程（参考图7-21)为例来分析Kafka 事务的实现原 理。
+
+![image-20210905094345630](Kafka.assets/image-20210905094345630.png)
+
+1. 查找TransactionCoordinator
+
+TransactionCoordinator负责分配PID和管理事务， 因此生产者要做的第 一 件事情就是找出 对应的TransactionCoordinator所在的broker节点。 与查找GroupCoordinator节点 一 样， 也是通 过FindCoordinatorRequest请求来实现的， 只不过FindCoordinatorRequest中的coordinator_ type就由原来的O变成了I, 由此来表示与事务相关联(FindCoordinatorReq uest请求的具体结 构参考图 7-5)。
+
+Kafka在收到FindCoorinatorRequest 请求之后， 会根据 coordinator_key (也就是 transactionalld)查找对应的TransactionCoordinator节点。如果找到，则会返回其相对应的node_id、 host和port信息。具体查找TransactionCoordinator的方式是根据transactionalld的哈希值计算主 题_transaction_state中的分区编号
+
+2. 获取PID：在找到 TransactionCoordinator节点之后 ，就需要 为 当前生产者 分配 个PID 了。 凡是开启 了幕等性功能的生产者都必须执行这个操作，不需要考虑该生产者是否还开启了事务。 生产者 获取PID的操作是通过InitProducerldRequest请求来实现的， InitProducerldRequest请求体结构 如图 7-22所示 ， 其中transactianal—id表示事务的 transactionalld,transaction_ timeout_ms表示 TransactionCoordinaor等待事务状态 更新的超时时间， 通过 生产者客户端参 数transaction.timeout.ms配置， 默认值为60000。
+3. 开启事 务
+
+通过 KafkaProducer 的 beginTransactionO 方法可以开启 一 个事务
 
 ## 12_Kafka文件存储
 
@@ -1872,20 +2102,111 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 
 
-## 13_Kafka 生产者分区策略
+## 13_Kafka 可靠性探究
 
-### 1.分区的原因
+### 13.1 副本剖析
 
-1. **方便在集群中扩展**，每个 Partition 可以通过调整以适应它所在的机器，而一个 topic又可以有多个 Partition 组成，因此整个集群就可以适应适合的数据了；
-2. **可以提高并发**，因为可以以 Partition 为单位读写了。（联想到ConcurrentHashMap在高并发环境下读写效率比HashTable的高效）
+#### 13.1.1 是小副本
 
-### 2.分区的原则
+正常情况下，分区的所有副本都处于ISR集合中，但是难免会有异常情况发生，从而某些 副本被剥离出ISR集合中。在ISR集合之外，也就是处于同步失效或功能失效（比如副本处于 非存活状态）的副本统称为失效副本， 失效副本对应的分区也就称为同步失效分区
 
-![img](Kafka学习.assets/08-8642179.png)
+前面提及失效副本不仅是指 处于功能失效状态的副本，处于同步失效状态的副本也可以看 一 作失效副本。怎么判定 个分区是否有副本处于同步失效 的状态呢? Kafka从0.9.x版本开始就 通过唯 一 的broker端参数replica.lag.time.max.ms来抉择，当ISR集合中的 一 个 follower 副本滞后leader副本的 时间超过此参数指定的值时则判定为同步失败，需要将此follower副本 剔除出ISR集合
 
-1. 指明 partition 的情况下，直接将指明的值直接作为 partiton 值；
-2. 没有指明 partition 值但有 key 的情况下，将 key 的 hash 值与 topic 的 partition 数进行取余得到 partition 值；
-3. 既没有 partition 值又没有 key 值的情况下，第一次调用时随机生成一个整数（后面每次调用在这个整数上自增），将这个值与 topic 可用的 partition 总数取余得到 partition值，也就是常说的 round-robin 算法。
+体的实现原理也很容易理解，当follower副本将leader副本LEO (LogEndOffset)之 前 的日志全部同步时，则认为 该 follower 副本已经追赶上leader 副本， 此 时更新该副本的 lastCaughtUpTimeMs标识。Kafka 的副本管理器会启动 一个副本过期检测的定时任务，而这个 定 时任 务会定 时检查当前时间与副 本 的 lastCaughtUpTimeMs差值是否大 于参 数 replica.lag.time.max.ms 指定的值 。
+
+#### 13.1.2 ISR的伸缩
+
+Kafka 在启动的时候会开启两个与ISR相关的定时任务，名称分别为"isr-expiration"和 isr-change-propagation"。isr- expiration任务会周期性地检测每个分区是否需要缩减其ISR集 合。这个周期和replica.lag.time.max.ms参数有关，大小是这个参数值的 一半
+
+当检测到ISR集合中有失效副本 时，就会收缩ISR集合 。如果某个分区的ISR集合 发生变更， 则会将变更后的数据 记录到ZooKeeper 对应的/brokers/topics/<topic＞／ partituon/ <partition>/state节点中
+
+`{ "controller_epoch": 26, "leader": 0, "version": 1, "leader_epoch" :2, "isr": [0, l]}`
+
+其中 controller—epoch表示当前 Kafka控制器的epoch, leader表示当前分区的leader 副本所在的broker的过编号， version表示 版本号（当前版本固定为1) , leader_epoch 表 示当前分区的leader纪元 ， isr表示变更后的ISR列表。
+
+#### 13.1.3 LEO与HW
+
+对于副本而言，还有两个概念：本地副本(Local Replica)和远程副本( Remote Replica) 本地副本是指对应的Log分配在当前 的broker节点上，远程副本是指对应的Log分配在其他的 broker节点上。
+
+整个消息追加的过程可以概括如下:
+
+( 1)生产者客户端发送消息至leader副本（副本1)中。
+
+( 2)消息被追加到leader副本的本地日志，并且会更新日志的偏移量。 
+
+( 3) follower副本（副本2和副本3)向leader副本请求同步数据。 (4) leader副本所在的服务器读取本地日志，并更新对应拉取 的 follower副本的信息。
+
+(5) leader副本所在的服务器将拉取结果返回给follower副本。
+
+(6) follower副本收到leader副本返回的拉取结果，将消息追加到本地日志中，并更新日 志的偏移量信息。
+
+之后follower副本 （不带阴影的方框）向leader副本拉取消息， 在拉取的请求中会带有自 身的LEO信息， 这个LEO信息对应的是FetchReques t请求中的fetch_offset 。leader副本 返回给follower副本相应的消息，并且还带有自身的HW信息， 如图8-5所示，这个HW信息 对应的是FetchResponse中的high_watermark。
+
+![image-20210905100921145](Kafka.assets/image-20210905100921145.png)
+
+#### 13.1.4 Leader Epoch介入
+
+首先我们来看 一 下数据丢失的问题， 如图8-9所示， Replica B是当前的leader 副本（用 L 标记）， Replica A是follower 副本。 参照8.1.3节中的图8-4至图8-7的 过程来进行分析：在某 一时刻， B中有2条消息 ml和m2 , A从B中 同步了这两条消息， 此时A和B的LEO都为2, 同时HW 都为l; 之后A再向B中发送请求以拉取消息， FetchRequest请求中带上了A的LEO 信息， B 在收到请求之后 更新了自己的HW为2; B中虽然没有更多的消息， 但还是在 延时一  段时间之后（参考6. 3节中的延时拉取）返回FetchResponse, 并在其中包含了HW信息；最后 A 根据FetchResponse中的 HW信息 更新自己的HW为2。
+
+![image-20210905101317529](Kafka.assets/image-20210905101317529.png)
+
+可以看到整个过程中两者之间的 HW 同步有一个问隙， 在 A 写入消息 m2 之后 C LEO 更新 为 2 ）需要再一轮的 FetchRequest/ FetchR巳sponse 才能更新自身的 HW 为 2 。如图 8- 10 所示， 如 果在这个时候 A 岩机了 ，那么在 A 重启之后会根据之前 HW 位置（这个值会存入本地的复制 点文件 replication-offset-checkpoint ）进行日志截断 ， 这样便会将 m2 这条消息删除 ，此时 A 只 剩下 ml 这一条消息， 之后 A 再向 B 发送 FetchRequest 请求拉取消息。
+
+![image-20210905101343163](Kafka.assets/image-20210905101343163.png)
+
+此时若 B 再右机， 那么 A 就会被选举为新的 leader， 如图 8-1 l 所示。 B 恢复之后会成为 follower， 由于 follower 副本 HW 不能 比 leader 副本的 HW 高，所 以还会做一次日志截断 ，以此 将 HW 调整为 l 。这样一来 m2 这条消息就丢失了（就算 B 不能恢复 ， 这条消息也同样丢失）。
+
+![image-20210905101359800](Kafka.assets/image-20210905101359800.png)
+
+如图 8-12 所示， 当前 leader 副本为 A, follower 副本为 B , A 中有 2 条消息 m l 和 m2 ，并 且 HW 和 LEO 都为 2, B 中 有 1 条消息 ml ， 井且 HW 和 LEO 都为 l 。假设 A 和 B 同时“挂掉”，然后 B 第一个恢复过来并成为 leader，如图 8-13 所示 。
+
+![image-20210905101458102](Kafka.assets/image-20210905101458102.png)
+
+之后 B 写入消息 m3 ， 并将 LEO 和 HW 更新至 2 （假设所有场景中的 rnin . insync.replicas 参数配置为 1 ） 。此时 A 也恢复过来了，根据前面数据丢失场景 中的介绍可知它会被赋予 follower
+
+的角色，井且需要根据 HW 截断日志及发送 FetchRequest 至 B ，不过此时 A 的 HW 正好也为 2, 那么就可以不做任何调整了，如图 8-14 所示 。
+
+![image-20210905101510068](Kafka.assets/image-20210905101510068.png)
+
+如此一来 A 中保留了 m2 而 B 中没有， B 中新增了 m3 而 A 也同步不到，这样 A 和 B 就出 现了数据不一致的情形 。
+
+**解决数据丢失**
+
+为了解决上述两种问题， Kafka 从 0.11.0.0 开始引入了 leader epoch 的概念，在需要截断数 据的时候使用 leader epoch 作为参考依据而不是原本的 HW。 leader epoch 代表 leader 的纪元信 息（ epoch ），初始值为 0。每当 leader 变更一次， leader epoch 的值就会加 l ，相当于为 leader 增设了 一个版本号 。与此同时，每个副本中还会增设一个矢量＜LeaderEpoch => StartOffset＞，其 中 StartOffset 表示当前 LeaderEpoch 下写入的第一条消息 的偏移量。每个副本的 Log 下都有一 个 leader-epoch-checkpoint 文件，在发生 leader epoch 变更时 ，会将对应的矢量对追加 到这个文 件中，其实这个文件在图 5-2 中己有所呈现。 5 .2.5 节中讲述 v2 版本的消息格式时就提到了消息 集中的 partition leader epoch 宇段，而这个字段正对应这里讲述的 leader epoch。
+
+下面我们再来看一下 引入 leader epoch 之后如何应付前面所说的数据丢失和数据不一致 的 场景。首先讲述应对数据丢失的问题，如图 8- 15 所示，这里只 比 图 8-9 中多了 LE (LeaderEpoch 的缩写 ，当前 A 和 B 中的 LE 都为 0 ） 。
+
+![image-20210905101602038](Kafka.assets/image-20210905101602038.png)
+
+同样 A 发生重启 ，之后 A 不是先忙着截断日志而是先发送 OffsetsF orLeaderEpochRequest 请求给 B ( OffsetsForLeaderEpochRequest 请求体结构 如 图也16 所示 ，其中包含 A 当前 的 LeaderEpoch 值） ' B 作为目前的 leader 在收到请求之后会返回当 前的 LEO
+
+![image-20210905102847105](Kafka.assets/image-20210905102847105.png)
+
+![image-20210905101934961](Kafka.assets/image-20210905101934961.png)
+
+如果 A 中的 LeaderEpoch （假设为 LE_A ）和 B 中的不相同，那么 B 此时会查找 LeaderEpoch 为 LE A+l 对应的 StartOffset 并返回给 A ，也就是 LE A 对应的 LEO ，所以我们可以将 OffsetsF orLeaderEpochRequest 的请求看作用来查找 follower 副本当前 LeaderEpoch 的 LEO 。
+
+如图 8-18 所示， A 在收到 2 之后发现和目前的 LEO 相同，也就不需要截断日志 了 。之后 同图 8-11 所示的一样， B 发生了右机， A 成为新的 leader，那么对应的 LE=O 也变成了 LE= l, 对应的消息 m2 此时就得到了保留
+
+
+
+**解决数据不一致**
+
+下面我们再来看一下 leader epoch 如何应对数据不一致的场景。
+
+当前 A 为 leader, B 为 follower, A 中有 2 条消息 ml 和 m2 ，而 B 中有 1 条消息 ml 。假设 A 和 B 同时“挂 掉”，然后 B 第一个恢复过来并成为新的 leader。
+
+之后B写入消息m3,并将LEO和HW更新至2, 如图8-21所示。注意此时的LeaderEpoch 已经从LEO增至LEI了
+
+紧接着A也恢复过来成为follower并向B发送OffsetsForLeaderEpochRequest请求，此时A 的 LeaderEpoch为LEO。 B根据LEO查询到对应的offset为1并返回给A, A就截断日志并删 除了消息m2, 如图8-22所示。 之后A发送FetchRequest至B请求来同步数据
+
+![image-20210905102044488](Kafka.assets/image-20210905102044488.png)
+
+#### 13.1.5 为什么不支持读写分离
+
+(1)数据 一 致性问题。数据从主节点转到从节点必然会有 一 个延时的时间窗口，这个时间窗口会导致主从节点之间的数据不 一 致。某 一 时刻，在主节点和从节点中A数据的值都为X, 之后将主节点中 A 的值修改为 Y, 那么在这个变更通知到从节点之前， 应用读取从节点中的 A 数据的值并不为最新的 Y, 由此便产生了数据不 一 致的问题。
+
+(2) 延时问题。类似 Redis 这种组件，数据从写入主节点到同步至从节点中的过程需要经 历网络一主节点内存一网络一从节点内存这几个阶段，整个过程会耗费 一 定的时间。 而在 Kafka 中，主从同步会比 Redis 更加耗时，它需要经历网络一主节点内存一主节点磁盘一网络一从节 点内存一从节点磁盘这几个阶段。对延时敏感的应用 而言，主写从读的功能并不太适用。
 
 ## 14_Kafka生产者ISR
 
