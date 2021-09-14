@@ -452,3 +452,453 @@ mysql> select prod_price from products order by prod_price desc limit 1;
 ## 5.4 小结
 
 本章学习了如何使用`SELECT`语句的`ORDER BY`子句对检索出的数据进行排序.这个子句必须是`SELECT`中最后一条子句.可根据需要,用它在一个或多个列上数据进行排序.
+
+# 第6章 过滤数据
+
+本章将讲授如何使用`SELECT`语句的`WHERE`子句指定搜索条件
+
+## 6.1 使用WHERE子句
+
+数据库表一般包含大量的数据,很少需要检索所有行,只检索需要的数据需要指定**搜索条件(search criteria)**,搜索条件也称为**过滤条件(filter condition)**
+
+在`SELECT`语句中,数据根据`WHERE`子句中指定的搜索条件进行过滤.`WHERE`子句在表名(`FROM`子句)之后给出
+
+```mysql
+mysql> select prod_name,prod_price from products where prod_price = 2.5;
++---------------+------------+
+| prod_name     | prod_price |
++---------------+------------+
+| Carrots       |       2.50 |
+| TNT (1 stick) |       2.50 |
++---------------+------------+
+2 rows in set (0.00 sec)
+```
+
+分析:这条语句从products表中检索两个列,但不返回所有行,只返回prod_price值为2.50的行
+
+> WHERE 子句的位置
+
+在同时使用`ORDER BY`和`WHERE`子句时,应该让`ORDER BY`位于`WHERE`之后,否则会产生错误
+
+## 6.2 WHERE子句操作符
+
+MySQL支持下列的所有条件操作符
+
+| 操作符  | 说明               |
+| ------- | ------------------ |
+| =       | 等于               |
+| <>      | 不等于             |
+| !=      | 不等于             |
+| <       | 小于               |
+| <=      | 小于等于           |
+| >       | 大于               |
+| >=      | 大于等于           |
+| BETWEEN | 在指定的两个值之间 |
+
+### 6.2.1 检查单个值
+
+我们下面看一个例子
+
+```mysql
+mysql> select prod_name,prod_price from products where prod_name = 'fuses';
++-----------+------------+
+| prod_name | prod_price |
++-----------+------------+
+| Fuses     |       3.42 |
++-----------+------------+
+1 row in set (0.00 sec)
+```
+
+分析:MySQL在执行匹配时默认不区分大小写,所以fuses与Fuses匹配.
+
+### 6.2.2 不匹配检查
+
+以下例子列出不是由供应商1003制造的所有产品.
+
+```mysql
+mysql> select vend_id,prod_name from products where vend_id <>1003;
++---------+--------------+
+| vend_id | prod_name    |
++---------+--------------+
+|    1001 | .5 ton anvil |
+|    1001 | 1 ton anvil  |
+|    1001 | 2 ton anvil  |
+|    1002 | Fuses        |
+|    1005 | JetPack 1000 |
+|    1005 | JetPack 2000 |
+|    1002 | Oil can      |
++---------+--------------+
+7 rows in set (0.00 sec)
+```
+
+> 何时使用引号
+
+如果仔细观察上述`WHERE`子句中使用的条件,会看到有的值在单引号内(\`fuses`).有的没有.
+
++ 单引号用来限制字符串,如果将值与串类型的列进行比较,需要限定引号.否则不用
++ 如果是数值类的进行比较,不需要引号
+
+### 6.2.3 范围值检查
+
+为了检查某个范围的值,可使用`BETWEEN`操作符.语法与其他的子句操作符稍有不同,因为它需要两个值.即范围的开始值和结束值.下面例子说明`BETWEEN`如何检索价格在5美元到10美元之间的所有产品.
+
+```mysql
+mysql> select prod_name,prod_price from products where prod_price between 5 and 10;
++----------------+------------+
+| prod_name      | prod_price |
++----------------+------------+
+| .5 ton anvil   |       5.99 |
+| 1 ton anvil    |       9.99 |
+| Bird seed      |      10.00 |
+| Oil can        |       8.99 |
+| TNT (5 sticks) |      10.00 |
++----------------+------------+
+5 rows in set (0.00 sec)
+```
+
+分析:使用`BETWEEN`的时候,必须指定两个值--所需范围的低端值和高端值.这两个值必须用`AND`关键字分隔.`BETWEEN`匹配范围中所有的值,包括开始值和结束值.
+
+### 6.2.4 空值检查
+
+在创建表的时候,表设计人员可以指定其中的列是否可以不包含值.不包含值的时候,称为包含空值`NULL`.
+
+> NULL 无值,与包含字段0/空字符串或者仅仅包含空格不同
+
+`SELECT`语句有一个特殊的`WHERE`子句,可以用来检查具有`NULL`值的列.这个`WHERE`子句就是`IS NULL`子句
+
+```mysql
+mysql> select prod_name from products where prod_price is NULL;
+Empty set (0.00 sec)
+```
+
+## 6.3 小结
+
+本章介绍了如何用`SELECT`语句的`WHERE`子句过滤返回的数据.过滤条件有相等/不相等/大于/小于/BETWEEN一级NULL值等进行测试.
+
+# 第7章 数据过滤
+
+这章讲述如何组合`WHERE`子句来建立功能更强的更高级的搜索条件,我们还将学习如何使用`NOT`和`IN`操作符
+
+## 7.1 组合WHERE子句
+
+### 7.1.1 AND操作符
+
+为了不止对一个列进行过滤,可以使用`AND`操作符给`WHERE`子句附加条件.
+
+```mysql
+mysql> select prod_id ,prod_price,prod_name from products where vend_id = 1003 and prod_price<=10;
++---------+------------+----------------+
+| prod_id | prod_price | prod_name      |
++---------+------------+----------------+
+| FB      |      10.00 | Bird seed      |
+| FC      |       2.50 | Carrots        |
+| SLING   |       4.49 | Sling          |
+| TNT1    |       2.50 | TNT (1 stick)  |
+| TNT2    |      10.00 | TNT (5 sticks) |
++---------+------------+----------------+
+5 rows in set (0.00 sec)
+```
+
+分析:这个SQL语句检索由供应商1003 制造且价格小于等于10美元的所有产品的名称和价格.这个语句里面包含两个条件,并且使用`AND`关键字连接他们.
+
+### 7.1.2 OR操作符
+
+`OR`指示检索匹配任意条件的行.
+
+```mysql
+mysql> select prod_id,prod_price,prod_name from products where vend_id = 1003 or vend_id = 1004 order by prod_price desc;
++---------+------------+----------------+
+| prod_id | prod_price | prod_name      |
++---------+------------+----------------+
+| SAFE    |      50.00 | Safe           |
+| DTNTR   |      13.00 | Detonator      |
+| FB      |      10.00 | Bird seed      |
+| TNT2    |      10.00 | TNT (5 sticks) |
+| SLING   |       4.49 | Sling          |
+| FC      |       2.50 | Carrots        |
+| TNT1    |       2.50 | TNT (1 stick)  |
++---------+------------+----------------+
+7 rows in set (0.00 sec)
+```
+
+分析:SQL语句检索任一个符合条件的供应商的信息(1003和1004)
+
+### 7.1.3 计算次序
+
+`WHERE`可包含任意数目的`AND`和`OR`操作符.允许两者结合进行更复杂和更高级的过滤.
+
+但,组合`AND`和`OR`也带来了一些问题.假如需要列出价格为10美元(含)以上且由1002或1003制造的所有产品,下面是一个错误的示例
+
+```mysql
+mysql> select prod_name,prod_price from products where vend_id=1002 or vend_id=1003 and prod_price >=10;
++----------------+------------+
+| prod_name      | prod_price |
++----------------+------------+
+| Detonator      |      13.00 |
+| Bird seed      |      10.00 |
+| Fuses          |       3.42 |
+| Oil can        |       8.99 |
+| Safe           |      50.00 |
+| TNT (5 sticks) |      10.00 |
++----------------+------------+
+6 rows in set (0.00 sec)
+
+
+```
+
+分析:有两行价格小于10美元.这是一个错误的返回.
+
+SQL在处理`OR`之前,优先处理`AND`操作符.当SQL看到上述`WHERE`子句的时候,理解为由供应商1003制造的10美元以上的商品,或由供应商1002制造的任何产品,而不关其价格如何.
+
+解决:使用圆括号明确分组相应的操作符.看下面的正确示例
+
+```mysql
+mysql> select prod_name,prod_price from products where (vend_id=1002 or vend_id=1003) and prod_price >=10;
++----------------+------------+
+| prod_name      | prod_price |
++----------------+------------+
+| Detonator      |      13.00 |
+| Bird seed      |      10.00 |
+| Safe           |      50.00 |
+| TNT (5 sticks) |      10.00 |
++----------------+------------+
+4 rows in set (0.00 sec)
+```
+
+下面的才是正确的结果.
+
+## 7.2 IN操作符
+
+**圆括号**在`WHERE`子句中还有另外一种用法.`IN`操作符用来指定条件范围,范围中的每个条件都可以进行匹配.`IN`取合法值的由逗号分隔的清单,全都在圆括号中.
+
+```mysql
+mysql> select prod_name,prod_price from products where vend_id in (1002,1003) order by prod_name;
++----------------+------------+
+| prod_name      | prod_price |
++----------------+------------+
+| Bird seed      |      10.00 |
+| Carrots        |       2.50 |
+| Detonator      |      13.00 |
+| Fuses          |       3.42 |
+| Oil can        |       8.99 |
+| Safe           |      50.00 |
+| Sling          |       4.49 |
+| TNT (1 stick)  |       2.50 |
+| TNT (5 sticks) |      10.00 |
++----------------+------------+
+9 rows in set (0.00 sec)
+```
+
+这个语句检索供应商1002和1003制造的所有产品.`IN`操作符后跟由逗号分隔的合法值清单,整个清单必须在圆括号中.
+
+为什么使用`IN`操作符?
+
++ 使用长的合法选项清单时,`IN`操作符的语法更清楚且更直观
++ 使用`IN`时,计算的次序更容易管理
++ `IN`操作符一般比`OR`操作符清单执行更快
++ `IN`最大优点是可以包含其他`SELECT`语句,能更动态地建立`WHERE`语句
+
+## 7.3 NOT操作符
+
+`WHERE`子句中的`NOT`操作符有且只有一个功能,那就是否定它之后所跟的任何条件
+
+下面的例子说明`NOT`的使用.列出除了1002和1003之外的所有供应商的产品
+
+```mysql
+mysql> select prod_name,prod_price from products where vend_id not in (1002,1003) order by prod_name;
++--------------+------------+
+| prod_name    | prod_price |
++--------------+------------+
+| .5 ton anvil |       5.99 |
+| 1 ton anvil  |       9.99 |
+| 2 ton anvil  |      14.99 |
+| JetPack 1000 |      35.00 |
+| JetPack 2000 |      55.00 |
++--------------+------------+
+5 rows in set (0.00 sec)
+```
+
+> MySQL中的NOT
+
+MySQL支持使用`NOT`对`IN`,`BETWEEN`和`EXISTS`子句取反
+
+## 7.4 小结
+
+本章讲授如何使用`AND`和`OR`操作符组成`WHERE`子句,而且还讲授了如何明确地管理计算的次序,如何使用`IN`和`NOT`操作符
+
+# 第8章 用通配符进行过滤
+
+## 8.1 LIKE操作符
+
+前面介绍的所有操作符都是针对已知值进行过滤的.利用通配符可以创建比较特定的数据的搜索模式.
+
+> 通配符 用来匹配值的一部分的特殊字符
+
+> 搜索模式 由字面值,通配符或两者组合构成的搜索条件
+
+通配符本身实际是SQL的`WHERE`子句中有特殊含义的字符,SQL支持几种通配符.
+
+使用通配符,必须使用`LIKE`操作符.`LIKE`指示MySQL.后跟的搜索模式利用通配符匹配而不是直接相等匹配进行比较.
+
+### 8.1.1 百分号(%)通配符
+
+最常使用的通配符是百分号`%`.在搜索串中,`%`表示任何字符出现**任意次数**.例如,为了找到词jet起头的产品,可以如何使用
+
+```mysql
+mysql> select prod_id, prod_name from products where prod_name like 'jet%';
++---------+--------------+
+| prod_id | prod_name    |
++---------+--------------+
+| JP1000  | JetPack 1000 |
+| JP2000  | JetPack 2000 |
++---------+--------------+
+2 rows in set (0.00 sec)
+```
+
+分析:`jet%`表示检索任意`jet`起头的词.`%`表示接受`jet`之后任意字符,不管它有多少字符.
+
+> % 匹配0个,1个或多个字符
+
+### 8.1.2 下划线(_)通配符
+
+另一个有用的通配符是下划线`_`.下划线的用途和`%`一样,但`_`匹配单个字符而不是多个字符
+
+```mysql
+mysql> select prod_id, prod_name from products where prod_name like '_ ton anvil';
++---------+-------------+
+| prod_id | prod_name   |
++---------+-------------+
+| ANV02   | 1 ton anvil |
+| ANV03   | 2 ton anvil |
++---------+-------------+
+2 rows in set (0.00 sec)
+```
+
+与`%`不同,`_`总是匹配一个字符,不能多也不能少.
+
+## 8.2 使用通配符的技巧
+
+通配符一般比其他搜索所花的时间更长.
+
++ 不要过度使用通配符,如果其他操作符能达到相同目的,应该使用其他通配符
++ 确实需要通配符的时候,除非有绝对必要,否则不要用在搜索模式的开始处.通配符放在搜索模式的开始处,搜索是最慢的.
+
+## 8.3 小结
+
+本章介绍了什么是通配符以及如何在`WHERE`子句中使用通配符.
+
+# 第9章 正则表达式
+
+## 9.1 正则表达式介绍
+
+略
+
+## 9.2 使用MySQL正则表达式
+
+这里只介绍正则表达式如何在MySQL中使用.
+
+匹配`Jet`开头的prod_name
+
+```mysql
+mysql> select prod_name from products where prod_name regexp 'jet.*';
++--------------+
+| prod_name    |
++--------------+
+| JetPack 1000 |
+| JetPack 2000 |
++--------------+
+2 rows in set (0.00 sec)
+```
+
+## 9.3 总结
+
+本章介绍了正则表达式的基础知识,学习如何在MySQL的`SELECT`语句中通过`REGEXP`关键字使用它们.
+
+# 第10章 创建计算字段
+
+## 10.1 计算字段
+
+我们需要直接从数据库中检索出转换,计算或格式化过的数据;而不是检索出数据,然后在客户机应用程序或报告程序中重新格式化.
+
+这就是计算字段发挥作用的所在了。与前面各章介绍过的列不同， 计算字段并不实际存在于数据库表中。计算字段是运行时在SELECT语句 内创建的。
+
+## 10.2 拼接字段
+
+为了说明如何使用计算字段,举一个创建两列组成的标题的简单例子.
+
+vendors表中包含供应商名和位置信息.我们需要在供应商表中按照name(location)这样的格式列出供应商的位置.
+
+此报表需要单个值,而表中数据存储在两个列vend_name和vend_country中括起来,这些东西没有明确存储在数据库表中
+
+> 拼接(concatenate) 将值联结起来构成单个值
+
+解决办法是把两个列拼接起来.在MySQL中,可以使用Concat()函数来拼接两个列
+
+```mysql
+mysql> select Concat(vend_name, '(',vend_country, ')') as 'name(location)' from vendors order by vend_name;
++------------------------+
+| name(location)         |
++------------------------+
+| ACME(USA)              |
+| Anvils R Us(USA)       |
+| Furball Inc.(USA)      |
+| Jet Set(England)       |
+| Jouets Et Ours(France) |
+| LT Supplies(USA)       |
++------------------------+
+6 rows in set (0.00 sec)
+```
+
+分析:Concat()拼接串，即把多个串连接起来形成一个较长的串。
+
+Concat()需要一个或多个指定的串，各个串之间用逗号分隔。
+
+上述的`SELECT`语句连接以下4个元素
+
++ 存储在vend_name列中的名字
++ 一个左圆括号
++ 存储在vend_country列中的国家
++ 包含一个右圆括号的串
+
+> 使用别名
+
+别名使用`AS`关键字赋值
+
+## 10.3 使用算术计算
+
+计算字段的另一常见用途是对检索出得数据进行算术计算.
+
+orderitems表包含每个订单中的各项物品以及item_price列包含订单中每项物品的单价.而quantity包含数量.
+
+```mysql
+mysql> select prod_id, quantity, item_price, quantity*item_price as total from orderitems order by total desc;
++---------+----------+------------+---------+
+| prod_id | quantity | item_price | total   |
++---------+----------+------------+---------+
+| TNT2    |      100 |      10.00 | 1000.00 |
+| FC      |       50 |       2.50 |  125.00 |
+| ANV01   |       10 |       5.99 |   59.90 |
+| JP2000  |        1 |      55.00 |   55.00 |
+| TNT2    |        5 |      10.00 |   50.00 |
+| ANV02   |        3 |       9.99 |   29.97 |
+| ANV03   |        1 |      14.99 |   14.99 |
+| FB      |        1 |      10.00 |   10.00 |
+| FB      |        1 |      10.00 |   10.00 |
+| OL1     |        1 |       8.99 |    8.99 |
+| SLING   |        1 |       4.49 |    4.49 |
++---------+----------+------------+---------+
+11 rows in set (0.00 sec)
+```
+
+MySQL支持如下的基本算术操作符
+
+| 操作符 | 说明 |
+| ------ | ---- |
+| +      | 加   |
+| -      | 减   |
+| *      | 乘   |
+| /      | 除   |
+
+## 10.4 小结
+
+本章介绍了计算字段以及如何创建计算字段.
