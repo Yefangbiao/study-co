@@ -1053,3 +1053,173 @@ mysql> select cust_id, order_num from orders where Year(order_date) = 2005 AND M
 ## 11.3 小结
 
 本章介绍了如何使用SQL的数据处理函数.
+
+# 第12张 汇总数据
+
+## 12.1 聚集函数
+
+我们经常需要汇总数据而不用把它们实际检索出来，为此MySQL提 供了专门的函数。使用这些函数，MySQL查询可用于检索数据，以便分 析和报表生成。这种类型的检索例子有以下几种。
+
++ 确定表中行数
++ 获得表中行组的和
++ 找出表列的最大值,最小值和平均值
+
+> 聚集函数 运行在行组上,计算和返回单个值的函数.
+
+| 函数    | 说明             |
+| ------- | ---------------- |
+| AVG()   | 返回某列的平均值 |
+| COUNT() | 返回某列的行数   |
+| MAX()   | 返回某列的最大值 |
+| MIN()   | 返回某列的最小值 |
+| SUM()   | 返回某列值之和   |
+
+### 12.1.1 AVG()函数
+
+AVG()通过对表中行数计数并计算特定列值之和，求得该列的平均 值
+
+```mysql
+mysql> select AVG(prod_price) as avg_price from products;
++-----------+
+| avg_price |
++-----------+
+| 16.133571 |
++-----------+
+1 row in set (0.00 sec)
+```
+
+### 12.1.2 COUNT()函数
+
+COUNT()函数进行计数.可利用COUNT()确定表中行的数目或符合特定条件的行的数目.
+
+COUNT()函数有两种使用方式.
+
++ 使用COUNT(*)对表中行的数目进行计算,不管表列中包含的是空(NULL)还是非空值
++ 使用COUNT(column)对特定列中具有值的行进行计数,胡烈NULL值
+
+1.下面的例子返回customers表中客户的总数
+
+```mysql
+mysql> select COUNT(*) AS num_cust from customers;
++----------+
+| num_cust |
++----------+
+|        5 |
++----------+
+1 row in set (0.00 sec)
+```
+
+2. 下列例子只对具有电子邮件地址的客户计数
+
+```mysql
+mysql> select COUNT(cust_email) as num_cust from customers;
++----------+
+| num_cust |
++----------+
+|        3 |
++----------+
+1 row in set (0.00 sec)
+```
+
+### 12.1.3 MAX()函数
+
+MAX()返回指定列中的最大值,要求指定列名
+
+```mysql
+mysql> select max(prod_price) as max_price from products;
++-----------+
+| max_price |
++-----------+
+|     55.00 |
++-----------+
+1 row in set (0.00 sec)
+```
+
+> 对非数值数据使用MAX() 虽然MAX()一般用来找出最大的 数值或日期值，但MySQL允许将它用来返回任意列中的最大 值，包括返回文本列中的最大值。在用于文本数据时，如果数 据按相应的列排序，则MAX()返回最后一行。
+
+> NULL值 MAX()函数忽略列值为NULL的行。
+
+### 12.1.4 MIN()函数
+
+MIN()功能恰好与MAX()相反,也要求指定列名
+
+```mysql
+mysql> select min(prod_price) as max_price from products;
++-----------+
+| max_price |
++-----------+
+|      2.50 |
++-----------+
+1 row in set (0.00 sec)
+```
+
+> 对非数值数据使用MIN() MIN()函数与MAX()函数类似， MySQL允许将它用来返回任意列中的最小值，包括返回文本 列中的最小值。在用于文本数据时，如果数据按相应的列排序， 则MIN()返回最前面的行。
+
+> NULL值 MIN()函数忽略列值为NULL的行
+
+### 12.1.5 SUM()函数
+
+SUM()用来返回指定列值的和(总计)。
+
+下面举一个例子，orderitems表包含订单中实际的物品，每个物品 有相应的数量(quantity)。可如下检索所订购物品的总数(所有 quantity值之和):
+
+```mysql
+mysql> select SUM(quantity) as total from orderitems;
++-------+
+| total |
++-------+
+|   174 |
++-------+
+1 row in set (0.00 sec)
+```
+
+SUM()也可以用来合计计算值。在下面的例子中，合计每项物品的
+
+item_price*quantity，得出总的订单金额:
+
+```mysql
+mysql> select SUM(quantity*item_price) as total from orderitems;
++---------+
+| total   |
++---------+
+| 1368.34 |
++---------+
+1 row in set (0.00 sec)
+```
+
+## 12.2 聚集不同值
+
+以上5个聚集函数都可以如下使用:
+
++ 只包含不同的值,指定`DISTINCT`参数
+
+下面的例子使用AVG()函数返回特定供应商提供的产品的平均价格。 它与上面的SELECT语句相同，但使用了DISTINCT参数，因此平均值只 考虑各个不同的价格:
+
+```mysql
+mysql> select avg(distinct prod_price) as avg_price from products where vend_id=1003;
++-----------+
+| avg_price |
++-----------+
+| 15.998000 |
++-----------+
+1 row in set (0.00 sec)
+```
+
+## 12.3 组合聚集函数
+
+`SELECT`语句可以根据需要包含多个聚集函数
+
+```mysql
+mysql> select count(*) as num_items,min(prod_price) as price_min,max(prod_price) as price_max, avg(prod_price) as price_avg from products;
++-----------+-----------+-----------+-----------+
+| num_items | price_min | price_max | price_avg |
++-----------+-----------+-----------+-----------+
+|        14 |      2.50 |     55.00 | 16.133571 |
++-----------+-----------+-----------+-----------+
+1 row in set (0.00 sec)
+```
+
+## 12.4 小结
+
+聚集函数用来汇总数据.MySQL支持一系列聚集函数.它们返回结果一般比在自己的客户机应用程序中计算快得多
+
