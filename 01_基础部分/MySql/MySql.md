@@ -1315,3 +1315,65 @@ mysql> select cust_id , COUNT(*) as orders from orders group by cust_id having c
 
 在第12章中，我们学习了如何用SQL聚集函数对数据进行汇总计算。 本章讲授了如何使用GROUP BY子句对数据组进行这些汇总计算，返回每 个组的结果。我们看到了如何使用HAVING子句过滤特定的组，还知道了 `ORDER BY`和`GROUP BY`之间以及`WHERE`和`HAVING`之间的差异。
 
+# 第14章 使用子查询
+
+SQL还允许创建子查询(subquery)，即嵌套在其他查询中的查询。
+
+## 14.2 利用子查询进行过滤
+
+订单存储在两个表中。对于包含订单号、客户ID、 订单日期的每个订单，orders表存储一行。各订单的物品存储在相关的 orderitems表中。orders表不存储客户信息。它只存储客户的ID。实际 的客户信息存储在customers表中。
+
+假如需要列出订购物品TNT2的所有客户，应该怎样检索?下 面列出具体的步骤
+
+1. 检索包含物品TNT2的所有订单的编号。
+2. 检索具有前一步骤列出的订单编号的所有客户的ID
+
+可以使用子查询来把3个查询组合成一条语句。
+
+```mysql
+mysql> select cust_id from orders where order_num in (select order_num from orderitems where prod_id = 'TNT2');
++---------+
+| cust_id |
++---------+
+|   10001 |
+|   10004 |
++---------+
+2 rows in set (0.00 sec)
+```
+
+分析:在SELECT语句中，子查询总是从内向外处理。在处理上面的 SELECT语句时，MySQL实际上执行了两个操作。
+
+## 14.3 作为计算字段使用子查询
+
+使用子查询的另一方法是创建计算字段。假如需要显示customers表中每个客户的订单总数。订单与相应的客户ID存储在orders表中。
+
+1. 从customers表中检索客户列表
+2. 对于检索出的客户,统计在orders表中的订单数目
+
+```mysql
+mysql> select cust_name, cust_state,(select count(*) from orders where orders.cust_id=customers.cust_id) as orders from customers;
++----------------+------------+--------+
+| cust_name      | cust_state | orders |
++----------------+------------+--------+
+| Coyote Inc.    | MI         |      2 |
+| Mouse House    | OH         |      0 |
+| Wascals        | IN         |      1 |
+| Yosemite Place | AZ         |      1 |
+| E Fudd         | IL         |      1 |
++----------------+------------+--------+
+5 rows in set (0.00 sec)
+```
+
+分析:这条SELECT语句对customers表中每个客户返回3列:
+
+cust_name、cust_state和orders。orders是一个计算字段， 它是由圆括号中的子查询建立的。该子查询对检索出的每个客户执行一 次。在此例子中，该子查询执行了5次，因为检索出了5个客户。
+
+> 相关子查询  涉及外部查询的子查询。
+
+`orders.cust_id = customers_cust_id`
+
+这种类型的子查询称为相关子查询。任何时候只要列名可能有多义 性，就必须使用这种语法(表名和列名由一个句点分隔)
+
+## 14.4 小结
+
+本章学习了什么是子查询以及如何使用它们。子查询最常见的使用 是在WHERE子句的IN操作符中，以及用来填充计算列。
