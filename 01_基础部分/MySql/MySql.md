@@ -1527,3 +1527,226 @@ select prod_name, vend_name, prod_price, quantity from orderitems inner join pro
 ## 15.3 小结
 
 联结是SQL中最重要最强大的特性，有效地使用联结需要对关系数据 库设计有基本的了解。本章随着对联结的介绍讲述了关系数据库设计的 一些基本知识，包括等值联结(也称为内部联结)这种最经常使用的联 结形式。下一章将介绍如何创建其他类型的联结。
+
+# 第16章 创建高级联结
+
+## 16.1 使用表别名
+
+SQL允许给表名取别名。
+
++ 缩短SQL语句
++ 允许在单条`SELECT`多次使用相同的表
+
+请看如下例子：
+
+```mysql
+mysql> select cust_name,cust_contact from customers as c,orders as o,orderitems as oi where c.cust_id=o.cust_id and oi.order_num=o.order_num and prod_id= 'TNT2';
++----------------+--------------+
+| cust_name      | cust_contact |
++----------------+--------------+
+| Coyote Inc.    | Y Lee        |
+| Yosemite Place | Y Sam        |
++----------------+--------------+
+2 rows in set (0.00 sec)
+```
+
+## 16.2 使用不同类型的联结
+
+迄今为止，我们使用的只是**内部联结**或**等值连接（equijoin）**的简单联结。来看看其他的联结。**自联结**、**自然联结**和**外部联结**。
+
+### 16.2.1 自联结
+
+假如你发现某物品（ID是**DTNTR**）存在问题，因此想知道生产该物品的供应商生产的其他物品是否也存在问题。首先找到供应商，然后找到供应商的其他物品。
+
+```mysql
+mysql> select prod_id,prod_name from products where vend_id=(select vend_id from products where prod_id = 'DTNTR');
++---------+----------------+
+| prod_id | prod_name      |
++---------+----------------+
+| DTNTR   | Detonator      |
+| FB      | Bird seed      |
+| FC      | Carrots        |
+| SAFE    | Safe           |
+| SLING   | Sling          |
+| TNT1    | TNT (1 stick)  |
+| TNT2    | TNT (5 sticks) |
++---------+----------------+
+7 rows in set (0.00 sec)
+```
+
+分析:这是一种解决方案，使用了子查询。
+
+
+
+下面来看看使用联结的相同查询:
+
+```mysql
+mysql> select p1.prod_id,p1.prod_name from products as p1,products as p2 where p1.vend_id=p2.vend_id and p2.prod_id = 'DTNTR';
++---------+----------------+
+| prod_id | prod_name      |
++---------+----------------+
+| DTNTR   | Detonator      |
+| FB      | Bird seed      |
+| FC      | Carrots        |
+| SAFE    | Safe           |
+| SLING   | Sling          |
+| TNT1    | TNT (1 stick)  |
+| TNT2    | TNT (5 sticks) |
++---------+----------------+
+7 rows in set (0.00 sec)
+```
+
+分析:此查询中需要的两个实际是相同的表，因此products在`FROM`子句中出现了两次。虽然完全合法，但是具有二义性。
+
+为了解决这个问题，使用了表别名。第一个别名是p1，第二个是p2。
+
+> 使用自联结而不用子查询  自联结通常比子查询快
+
+### 16.2.2 自然联结
+
+**自然联结**排除多次出现，每个列只返回一次
+
+自然联结是这样一种联结，其中你只能选择唯一的列。对其他的表的列使用明确的子集
+
+下面是一个例子
+
+```mysql
+mysql> select c.*,o.order_num,o.order_date,oi.prod_id,oi.quantity,oi.item_price from customers as c,orders as o, orderitems as oi where c.cust_id=o.cust_id and oi.order_num=o.order_num and prod_id = 'FB';
+```
+
+### 16.2.3 外部联结
+
+许多联结将一个表中的行与另一个表中的行关联。但有时候需要包含没有关联行的那些行。例如，可能需要使用联结来完成以下工作:
+
++ 对每个客户下了多少订单数进行计数，包括那些至今尚未下订单的客户。
++ 列出所有产品以及订购数量，包括没有人订购的产品
+
+上面例子中，联结包含了那些在相关表中没有关联行的行。这种联结称为**外部联结**。
+
+下面的`SELECT`语句给出了一个外部联结。
+
+```mysql
+mysql> select customers.cust_id,orders.order_num from customers left outer join orders on customers.cust_id = orders.cust_id;
++---------+-----------+
+| cust_id | order_num |
++---------+-----------+
+|   10001 |     20005 |
+|   10001 |     20009 |
+|   10002 |      NULL |
+|   10003 |     20006 |
+|   10004 |     20007 |
+|   10005 |     20008 |
++---------+-----------+
+6 rows in set (0.00 sec)
+```
+
+分析:`OUTER JOIN`. 外部联结包含了没有关联的行的行,使用`OUTER JOIN`时候，必须使用`RIGHT`和`LEFT`关键字指定包括所有行的表。
+
+## 16.3 使用带聚集函数的联结
+
+看下面一个例子
+
+```mysql
+mysql> select customers.cust_name ,customers.cust_id, count(orders.order_num) as num_ord from customers inner join orders on customers.cust_id = orders.cust_id group by customers.cust_id;
++----------------+---------+---------+
+| cust_name      | cust_id | num_ord |
++----------------+---------+---------+
+| Coyote Inc.    |   10001 |       2 |
+| Wascals        |   10003 |       1 |
+| Yosemite Place |   10004 |       1 |
+| E Fudd         |   10005 |       1 |
++----------------+---------+---------+
+4 rows in set (0.00 sec)
+```
+
+## 16.4 使用联结和联结条件
+
++ 一般我们使用内部联结，但外部联结也是有效的
++ 保证使用正确的联结条件
++ 应该提供联结条件，不然得出笛卡尔积
++ 一个联结中可以包含多个表。
+
+## 16.5 小结
+
+本章是上一章的继续。讲述使用别名，讨论不同的联结类型以及每种联结的语法形式。
+
+# 第17章 组合查询
+
+本章讲述如何利用`UNION`操作符将多条`SELECT`语句组合成一个结果
+
+## 17.1 组合查询
+
+多数SQL查询都只包含一个从或多个表中返回数据的单条`SELECT`语句。MySQL也允许执行多个查询（多个SELECT）.然后将结果作为单个查询结果返回。这些查询结果称为**并（union）**或者**复合查询**
+
+有两种情况，需要使用组合查询：
+
++ 单个查询中从不同表返回类似结构的数据
++ 对单个表多个查询，按照单个查询返回数据。
+
+> 组合查询和多个WHERE条件 多数情况下，组合相同表的两个 查询完成的工作与具有多个WHERE子句条件的单条查询完成的 工作相同。换句话说，任何具有多个WHERE子句的SELECT语句 都可以作为一个组合查询给出，在以下段落中可以看到这一点。 这两种技术在不同的查询中性能也不同。因此，应该试一下这 两种技术，以确定对特定的查询哪一种性能更好。
+
+## 17.2 创建组合查询
+
+可用 `UNION` 操作符来组合数条SQL查询。
+
+### 17.2.1 使用UNION
+
+`UNION`使用很简单。所需做的只是给出每条`SELECT`语句，在各条语 句之间放上关键字`UNION`。
+
+举一个例子，假如需要价格小于等于5的所有物品的一个列表，而且 还想包括供应商1001和1002生产的所有物品（不考虑价格）。当然，可以 利用WHERE子句来完成此工作，不过这次我们将使用UNION。
+
+```mysql
+mysql> select vend_id,prod_id,prod_price from products where prod_price <=5 union select vend_id, prod_id, prod_price from products where vend_id in (1001,1002);
++---------+---------+------------+
+| vend_id | prod_id | prod_price |
++---------+---------+------------+
+|    1003 | FC      |       2.50 |
+|    1002 | FU1     |       3.42 |
+|    1003 | SLING   |       4.49 |
+|    1003 | TNT1    |       2.50 |
+|    1001 | ANV01   |       5.99 |
+|    1001 | ANV02   |       9.99 |
+|    1001 | ANV03   |      14.99 |
+|    1002 | OL1     |       8.99 |
++---------+---------+------------+
+8 rows in set (0.00 sec)
+```
+
+分析:这条语句由前面的两条SELECT语句组成，语句中用UNION关键 字分隔。UNION指示MySQL执行两条SELECT语句，并把输出组 合成单个查询结果集。
+
+### 17.2.2 UNION规则
+
++ UNION必须由两条`SELECT`语句组成，语句之间使用关键字`UNION`分隔。
++ UNION的每个查询必须包含相同的列、表达式或聚集函数
+
+### 17.2.3 包含或取消重复的行
+
+`UNION`从查询结果集中自动去除了重复的行。这是`UNION`的默认行为
+
+这是`UNION`的默认行为，但是如果需要，可以改变它。事实上，如果 想返回所有匹配行，可使用`UNION ALL`而不是`UNION`。
+
+```mysql
+mysql> select vend_id,prod_id,prod_price from products where prod_price <=5 union all select vend_id, prod_id, prod_price from products where vend_id in (1001,1002);
++---------+---------+------------+
+| vend_id | prod_id | prod_price |
++---------+---------+------------+
+|    1003 | FC      |       2.50 |
+|    1002 | FU1     |       3.42 |
+|    1003 | SLING   |       4.49 |
+|    1003 | TNT1    |       2.50 |
+|    1001 | ANV01   |       5.99 |
+|    1001 | ANV02   |       9.99 |
+|    1001 | ANV03   |      14.99 |
+|    1002 | FU1     |       3.42 |
+|    1002 | OL1     |       8.99 |
++---------+---------+------------+
+9 rows in set (0.00 sec)
+```
+
+### 17.2.4 对组合查询结果排序
+
+`SELECT`语句的输出用`ORDER BY`子句排序。在用UNION组合查询时，只 能使用一条ORDER BY子句，它必须出现在最后一条SELECT语句之后。
+
+## 17.3 小结
+
+本章讲授如何用UNION操作符来组合SELECT语句。利用UNION，可把 多条查询的结果作为一条组合查询返回，不管它们的结果中包含还是不 包含重复。使用UNION可极大地简化复杂的WHERE子句，简化从多个表中 检索数据的工作。
