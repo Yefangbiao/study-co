@@ -1377,3 +1377,153 @@ cust_name、cust_state和orders。orders是一个计算字段， 它是由圆括
 ## 14.4 小结
 
 本章学习了什么是子查询以及如何使用它们。子查询最常见的使用 是在WHERE子句的IN操作符中，以及用来填充计算列。
+
+# 第15章 联结表
+
+## 15.1 联结
+
+SQL最强大的功能之一就是能在数据检索查询的执行中联结(join) 表。联结是利用SQL的SELECT能执行的最重要的操作
+
+### 15.1.1 关系表
+
+理解关系表的最好方法是来看一个现实世界中的例子。
+
+假如有一个包含产品目录的数据库表，其中每种类别的物品占一行。 对于每种物品要存储的信息包括产品描述和价格，以及生产该产品的供 应商信息。
+
+现在，假如有由同一供应商生产的多种物品，那么在何处存储供应 商信息(如，供应商名、地址、联系方法等)呢?将这些数据与产品信 息分开存储的理由如下。
+
++ 因为同一供应商生产的每个产品的供应商信息都是相同的，对每 个产品重复此信息既浪费时间又浪费存储空间。
++ 如果供应商信息改变(例如，供应商搬家或电话号码变动)，只需 改动一次即可。
++ 如果有重复数据(即每种产品都存储供应商信息)，很难保证每次 输入该数据的方式都相同。不一致的数据在报表中很难利用。
+
+关键是，相同数据出现多次决不是一件好事，此因素是关系数据库 设计的基础。关系表的设计就是要保证把信息分解成多个表，一类数据 一个表。各表通过某些常用的值(即关系设计中的关系(relational))互 相关联。
+
+在这个例子中，可建立两个表，一个存储供应商信息，另一个存储 产品信息。vendors表包含所有供应商信息，每个供应商占一行，每个供 应商具有唯一的标识。此标识称为主键(primary key)(在第1章中首次 提到)，可以是供应商ID或任何其他唯一值。
+
+products表只存储产品信息，它除了存储供应商ID(vendors表的主 键)外不存储其他供应商信息。vendors表的主键又叫作products的外键， 它将vendors表与products表关联，利用供应商ID能从vendors表中找出 相应供应商的详细信息。
+
+> 外键  外键为某个表中的一列，它包含另一个表 的主键值，定义了两个表之间的关系。
+
++ 供应商信息不重复,不浪费时间和空间
++ 如果供应商信息变动,可以只更新vendors表单个记录
++ 数据无重复,显然数据是一致的
+
+> 可伸缩性 能够适应不断增加的工作量而不失败。设 计良好的数据库或应用程序称之为可伸缩性好(scale well)。
+
+### 15.1.2 为什么要使用联结
+
+如果数据存储在多个表中，怎样用单条SELECT语句检索出数据?
+
+答案是使用联结。简单地说，联结是一种机制，用来在一条SELECT 语句中关联表，因此称之为联结。使用特殊的语法，可以联结多个表返 回一组输出，联结在运行时关联表中正确的行。
+
+## 15.2 创建联结
+
+联结的创建非常简单，规定要联结的所有表以及它们如何关联即可。 请看下面的例子:
+
+```mysql
+mysql> select vend_name, prod_name, prod_price from vendors, products where vendors.vend_id=products.vend_id;
++-------------+----------------+------------+
+| vend_name   | prod_name      | prod_price |
++-------------+----------------+------------+
+| Anvils R Us | .5 ton anvil   |       5.99 |
+| Anvils R Us | 1 ton anvil    |       9.99 |
+| Anvils R Us | 2 ton anvil    |      14.99 |
+| LT Supplies | Fuses          |       3.42 |
+| LT Supplies | Oil can        |       8.99 |
+| ACME        | Detonator      |      13.00 |
+| ACME        | Bird seed      |      10.00 |
+| ACME        | Carrots        |       2.50 |
+| ACME        | Safe           |      50.00 |
+| ACME        | Sling          |       4.49 |
+| ACME        | TNT (1 stick)  |       2.50 |
+| ACME        | TNT (5 sticks) |      10.00 |
+| Jet Set     | JetPack 1000   |      35.00 |
+| Jet Set     | JetPack 2000   |      55.00 |
++-------------+----------------+------------+
+14 rows in set (0.00 sec)
+```
+
+分析:我们来考察一下此代码。SELECT语句与前面所有语句一样指定要检索的列。这里，最大的差别是所指定的两个列(prod_name 和prod_price)在一个表中，而另一个列(vend_name)在另一个表中。
+
+可以看到要匹配的两个列以vendors.vend_id和products. vend_id指定。这里需要这种完全限定列名，因为如果只给出vend_id， 则MySQL不知道指的是哪一个(它们有两个，每个表中一个)。
+
+> 完全限定列名 在引用的列可能出现二义性时，必须使用完 全限定列名(用一个点分隔的表名和列名)。如果引用一个 没有用表名限制的具有二义性的列名，MySQL将返回错误。
+
+### 15.2.1 WHERE子句的重要性
+
+利用WHERE子句建立联结关系似乎有点奇怪，但实际上，有一个很充 分的理由。请记住，在一条SELECT语句中联结几个表时，相应的关系是 在运行中构造的。在数据库表的定义中不存在能指示MySQL如何对表进 行联结的东西。你必须自己做这件事情。在联结两个表时，你实际上做 的是将第一个表中的每一行与第二个表中的每一行配对。WHERE子句作为 过滤条件，它只包含那些匹配给定条件(这里是联结条件)的行。
+
+> 笛卡尔积 由没有联结条件的表关系返回的结果为笛卡儿积。检索出的行的数目将是第一个表中的行数乘 以第二个表中的行数。
+
+```mysql
+mysql> select vend_name, prod_name, prod_price from vendors,products;
++----------------+----------------+------------+
+| vend_name      | prod_name      | prod_price |
++----------------+----------------+------------+
+| Anvils R Us    | .5 ton anvil   |       5.99 |
+| LT Supplies    | .5 ton anvil   |       5.99 |
+| ACME           | .5 ton anvil   |       5.99 |
+| Furball Inc.   | .5 ton anvil   |       5.99 |
+```
+
+一共84行
+
+### 15.2.2 内部联结
+
+目前为止所用的联结称为**等值联结(equijoin)**，它基于两个表之间的 相等测试。这种联结也称为内部联结。其实，对于这种联结可以使用稍 微不同的语法来明确指定联结的类型。下面的SELECT语句返回与前面例 子完全相同的数据:
+
+```mysql
+mysql> select vend_name,prod_name,prod_price from vendors inner join products on vendors.vend_id = products.vend_id;
++-------------+----------------+------------+
+| vend_name   | prod_name      | prod_price |
++-------------+----------------+------------+
+| Anvils R Us | .5 ton anvil   |       5.99 |
+| Anvils R Us | 1 ton anvil    |       9.99 |
+| Anvils R Us | 2 ton anvil    |      14.99 |
+| LT Supplies | Fuses          |       3.42 |
+| LT Supplies | Oil can        |       8.99 |
+| ACME        | Detonator      |      13.00 |
+| ACME        | Bird seed      |      10.00 |
+| ACME        | Carrots        |       2.50 |
+| ACME        | Safe           |      50.00 |
+| ACME        | Sling          |       4.49 |
+| ACME        | TNT (1 stick)  |       2.50 |
+| ACME        | TNT (5 sticks) |      10.00 |
+| Jet Set     | JetPack 1000   |      35.00 |
+| Jet Set     | JetPack 2000   |      55.00 |
++-------------+----------------+------------+
+14 rows in set (0.00 sec)
+```
+
+分析:此语句中的SELECT与前面的SELECT语句相同，但FROM子句不同。这里，两个表之间的关系是FROM子句的组成部分，以INNER JOIN指定。在使用这种语法时，联结条件用特定的`ON`子句而不是WHERE 子句给出。传递给ON的实际条件与传递给WHERE的相同。
+
+> 使用哪种语法 ANSI SQL规范首选INNER JOIN语法。此外， 尽管使用WHERE子句定义联结的确比较简单，但是使用明确的 联结语法能够确保不会忘记联结条件，有时候这样做也能影响 性能。
+
+### 15.2.3 联结多个表
+
+SQL对一条SELECT语句中可以联结的表的数目没有限制。首先列出所有表，然后定义表之间的关系。
+
+```mysql
+mysql> select prod_name,vend_name,prod_price ,quantity from orderitems,products,vendors where products.vend_id = vendors.vend_id and orderitems.prod_id = products.prod_id and order_num = 20005;
++----------------+-------------+------------+----------+
+| prod_name      | vend_name   | prod_price | quantity |
++----------------+-------------+------------+----------+
+| .5 ton anvil   | Anvils R Us |       5.99 |       10 |
+| 1 ton anvil    | Anvils R Us |       9.99 |        3 |
+| TNT (5 sticks) | ACME        |      10.00 |        5 |
+| Bird seed      | ACME        |      10.00 |        1 |
++----------------+-------------+------------+----------+
+4 rows in set (0.00 sec)
+```
+
+分析:此例子显示编号为20005的订单中的物品。订单物品存储在orderitems表中。每个产品按其产品ID存储，它引用products 表中的产品。这些产品通过供应商ID联结到vendors表中相应的供应商， 供应商ID存储在每个产品的记录中。这里的FROM子句列出了3个表，而 WHERE子句定义了这两个联结条件，而第三个联结条件用来过滤出订单 20005中的物品。
+
+另一种写法:
+
+```mysql
+select prod_name, vend_name, prod_price, quantity from orderitems inner join products on orderitems.prod_id = products.prod_id inner join vendors on products.vend_id = vendors.vend_id and order_num=20005;
+```
+
+## 15.3 小结
+
+联结是SQL中最重要最强大的特性，有效地使用联结需要对关系数据 库设计有基本的了解。本章随着对联结的介绍讲述了关系数据库设计的 一些基本知识，包括等值联结(也称为内部联结)这种最经常使用的联 结形式。下一章将介绍如何创建其他类型的联结。
