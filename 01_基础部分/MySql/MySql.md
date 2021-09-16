@@ -1750,3 +1750,196 @@ mysql> select vend_id,prod_id,prod_price from products where prod_price <=5 unio
 ## 17.3 小结
 
 本章讲授如何用UNION操作符来组合SELECT语句。利用UNION，可把 多条查询的结果作为一条组合查询返回，不管它们的结果中包含还是不 包含重复。使用UNION可极大地简化复杂的WHERE子句，简化从多个表中 检索数据的工作。
+
+# 第18章 全文本搜索
+
+## 18.1 理解全文本搜索
+
+> 并非所有引擎都支持全文本搜索  MySQL 支持几种基本的数据库引擎。并非所有的引擎都支持本书所描 述的全文本搜索。两个最常使用的引擎为MyISAM和InnoDB， 前者支持全文本搜索，而后者不支持。
+
+## 18.2 使用全文本搜索
+
+为了进行全文本搜索，必须索引被搜索的列，而且要随着数据的改 变不断地重新索引。在对表列进行适当设计后，MySQL会自动进行所有 的索引和重新索引。
+
+在索引之后，SELECT可与Match()和Against()一起使用以实际执行 搜索。
+
+### 18.2.1 启用全文本搜索支持
+
+一般在创建表时启用全文本搜索。CREATE TABLE语句（第21章中介 绍）接受FULLTEXT子句，它给出被索引列的一个逗号分隔的列表。
+
+```mysql
+CREATE TABLE productnotes
+(
+  note_id    int           NOT NULL AUTO_INCREMENT,
+  prod_id    char(10)      NOT NULL,
+  note_date datetime       NOT NULL,
+  note_text  text          NULL ,
+  PRIMARY KEY(note_id),
+  FULLTEXT(note_text)
+) ENGINE=MyISAM;
+```
+
+这些列中有一个名为 note_text 的列， 为了进行全文本搜索， MySQL根据子句 FULLTEXT(note_text) 的指示对它进行索引。
+
+### 18.2.2 进行全文本搜索
+
+在索引之后，使用两个函数`Match()`和`Against()`执行全文本搜索， 其中`Match()`指定被搜索的列，`Against()`指定要使用的搜索表达式。
+
+下面举一个例子:
+
+```mysql
+mysql> select note_text from productnotes where match(note_text) against('rabbit');
++-----------------------------------------------------------------------------------------------------------------------+
+| note_text                                                                                                             |
++-----------------------------------------------------------------------------------------------------------------------+
+| Customer complaint: rabbit has been able to detect trap, food apparently less effective now.                          |
+| Quantity varies, sold by the sack load.
+All guaranteed to be bright and orange, and suitable for use as rabbit bait. |
++-----------------------------------------------------------------------------------------------------------------------+
+2 rows in set (0.00 sec)
+```
+
+分析:此SELECT语句检索单个列note_text。由于WHERE子句，一个全 文本搜索被执行。Match(note_text)指示MySQL针对指定的 列进行搜索，Against('rabbit')指定词rabbit作为搜索文本。由于有 两行包含词rabbit，这两个行被返回。
+
+刚才的搜索可以简单的使用`LIKE`完成
+
+```mysql
+mysql> select note_text from productnotes where note_text like '%rabbit%';
+```
+
+### 18.2.3 使用查询扩展
+
+查询扩展用来设法放宽所返回的全文本搜索结果的范围。考虑下面 的情况。你想找出所有提到anvils的注释。只有一个注释包含词anvils， 但你还想找出可能与你的搜索有关的所有其他行， 即使它们不包含词anvils。
+
+使用查询扩展的时候。MySQL对数据和索引进行两边扫描来完成搜索:
+
++ 首先，进行一个基本的全文本搜索，找出与搜索条件匹配的所有 行；
++ MySQL检查这些匹配行并选择所有有用的词
++ 再次进行全文搜索，不仅使用原来的条件，还使用所有有用的词
+
+下面举一个例子
+
+```mysql
+mysql> select note_text from productnotes where match(note_text) against('anvils' with query expansion);
++----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| note_text                                                                                                                                                |
++----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Multiple customer returns, anvils failing to drop fast enough or falling backwards on purchaser. Recommend that customer considers using heavier anvils. |
+| Customer complaint:
+Sticks not individually wrapped, too easy to mistakenly detonate all at once.
+Recommend individual wrapping.                       |
+| Customer complaint:
+Not heavy enough to generate flying stars around head of victim. If being purchased for dropping, recommend ANV02 or ANV03 instead. |
+| Please note that no returns will be accepted if safe opened using explosives.                                                                            |
+| Customer complaint: rabbit has been able to detect trap, food apparently less effective now.                                                             |
+| Customer complaint:
+Circular hole in safe floor can apparently be easily cut with handsaw.                                                              |
+| Matches not included, recommend purchase of matches or detonator (item DTNTR).                                                                           |
++----------------------------------------------------------------------------------------------------------------------------------------------------------+
+7 rows in set (0.00 sec)
+```
+
+分析:这次返回了7行。第一行包含词anvils，因此等级最高。第二 行与anvils无关，但因为它包含第一行中的两个词（customer 和recommend），所以也被检索出来。第3行也包含这两个相同的词，但它 们在文本中的位置更靠后且分开得更远，因此也包含这一行，但等级为 第三。第三行确实也没有涉及anvils（按它们的产品名）。
+
+### 18.2.4 布尔文本支持
+
+`MySQL`支持全文搜索的另外一种形式，称为**布尔方式（boolean mode）**
+
++ 要匹配的词
++ 要排斥的词
++ 排列提示
++ 表达式分组
++ 另外一些内容
+
+> 即使没有FULLTEXT索引也可以使用  布尔方式不同于迄今为 止使用的全文本搜索语法的地方在于，即使没有定义 FULLTEXT索引，也可以使用它。但这是一种非常缓慢的操作 （其性能将随着数据量的增加而降低）。
+
+举一个例子
+
+```mysql
+mysql> select note_text from productnotes where match(note_text) against('heavy' in boolean mode);
++----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| note_text                                                                                                                                                |
++----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Item is extremely heavy. Designed for dropping, not recommended for use with slings, ropes, pulleys, or tightropes.                                      |
+| Customer complaint:
+Not heavy enough to generate flying stars around head of victim. If being purchased for dropping, recommend ANV02 or ANV03 instead. |
++----------------------------------------------------------------------------------------------------------------------------------------------------------+
+2 rows in set (0.00 sec)
+```
+
+分析:此全文本搜索检索包含词heavy的所有行（有两行）。其中使用 了关键字`IN BOOLEAN MODE`，但实际上没有指定布尔操作符， 因此，其结果与没有指定布尔方式的结果相同。
+
+为了匹配包含heavy但不包含任意以rope开始的词的行，可使用以下 查询：
+
+```mysql
+mysql> select note_text from productnotes where match(note_text) against('heavy -rope*' in boolean mode);
++----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| note_text                                                                                                                                                |
++----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Customer complaint:
+Not heavy enough to generate flying stars around head of victim. If being purchased for dropping, recommend ANV02 or ANV03 instead. |
++----------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+```
+
+
+
+下面给出所有支持的布尔操作符
+
+| 布尔操作符 | 说明                                                         |
+| ---------- | ------------------------------------------------------------ |
+| +          | 包含，词必须存在                                             |
+| -          | 排除，词必须不出现                                           |
+| >          | 包含，而且增加等级值                                         |
+| <          | 包含，且减少等级值                                           |
+| ()         | 把词组成子表达式（允许这些子表达式作为一个组被包含、排除、排列等） |
+| ~          | 取消一个词的排序值                                           |
+| *          | 词尾的通配符                                                 |
+| ""         | 定义一个短语（与单个词的列表不一样，它匹配整个短语以便包含或排除这个短语） |
+
+下面举几个例子，说明某些操作符如何使用：
+
+```mysql
+mysql> select note_text from productnotes where match(note_text) against('+heavy +rope' in boolean mode);
+```
+
+分析：这个搜索匹配包含词rabbit和bait的行
+
+```mysql
+mysql> select note_text from productnotes where match(note_text) against('heavy rope' in boolean mode);
+```
+
+分析：没有指定操作符，这个搜索匹配rabbit和bait中的至少一个词的行。
+
+```mysql
+mysql> select note_text from productnotes where match(note_text) against("heavy rope" in boolean mode);
+```
+
+分析：这个搜索匹配短语`rabbit bait`而不是匹配两个词rabbit和bait
+
+```mysql
+mysql> select note_text from productnotes where match(note_text) against('>heavy <rope' in boolean mode);
+```
+
+分析：匹配rabbit和carrot，增加前者等级，降低后者等级
+
+```mysql
+mysql> select note_text from productnotes where match(note_text) against('+safe +(<combination)' in boolean mode);
+```
+
+分析：这个搜搜必须匹配到safe和combination。并且降低后者的等级。
+
+### 18.2.5 全文本搜索的使用说明
+
++ 在索引全文本数据时，短词被忽略且从索引中排除。短词定义为 那些具有3个或3个以下字符的词（如果需要，这个数目可以更改）。
++ MySQL带有一个内建的非用词（stopword）列表，这些词在索引全文本数据时总是被忽略
++ 许多词出现的频率很高，搜 因此，MySQL规定了一条50%规则，如果一个词出现在50%以上 的行中，则将它作为一个非用词忽略。50%规则不用于IN BOOLEAN MODE。
++ 如果表中的行数少于3行，则全文本搜索不返回结果（因为每个词 或者不出现，或者至少出现在50%的行中）。
++ 忽略词中的单引号。例如，don't索引为dont。
++ 不具有词分隔符（包括日语和汉语）的语言不能恰当地返回全文 本搜索结果。
++ 如前所述，仅在MyISAM数据库引擎中支持全文本搜索。
+
+## 18.3 小结
+
+本章介绍了为什么要使用全文本搜索， 以及如何使用MySQL的 `Match()`和`Against()`函数进行全文本搜索。我们还学习了查询扩展（它 能增加找到相关匹配的机会）和如何使用布尔方式进行更细致的查找控 制。
+
