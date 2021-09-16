@@ -2080,3 +2080,468 @@ DELETE from customers where cust_id=10006;
 
 我们在本章中学习了如何使用`UPDATE`和`DELETE`语句处理表中的数 据。我们学习了这些语句的语法，知道了它们固有的危险性。本章中还 讲解了为什么`WHERE`子句对`UPDATE`和`DELETE`语句很重要，并且给出了应该 遵循的一些指导原则，以保证数据的安全。
 
+# 第21章  创建和操纵表
+
+## 21.1 创建表
+
+一般有两种创建表的方法：
+
++ 使用具有交互式创建和管理表的工具
++ 表也可以直接用MySQL语句操纵。
+
+### 21.1.1表创建基础
+
+可以使用`SQL`的`CREATE TABLE`创建表，必须给出下列信息：
+
++ 新表的名字，在关键字`CREATE TABLE`之后给出。
++ 表列的名字和定义，用逗号分割
+
+下面的MySQL语句创建本书所用的customers表
+
+```mysql
+CREATE TABLE `customers` (
+  `cust_id` int(11) NOT NULL AUTO_INCREMENT,
+  `cust_name` char(50) NOT NULL,
+  `cust_address` char(50) DEFAULT NULL,
+  `cust_city` char(50) DEFAULT NULL,
+  `cust_state` char(5) DEFAULT NULL,
+  `cust_zip` char(10) DEFAULT NULL,
+  `cust_country` char(50) DEFAULT NULL,
+  `cust_contact` char(50) DEFAULT NULL,
+  `cust_email` char(255) DEFAULT NULL,
+  PRIMARY KEY (`cust_id`)
+) ENGINE=InnoDB
+```
+
+分析：表名紧跟`CREATE TABLE`之后。实际表定义（所有列）在圆括号之中。各列之间使用逗号隔开。表的主键可以在创建表的时候用`PRIMARY KEY`关键字指定。
+
+### 21.1.2 使用NULL值
+
+每个表列是NULL或者是NOT NULL。
+
+### 21.1.3 主键再介绍
+
+表中每个行必须有唯一的主键值。如果使用单个列，值必须唯一。如果使用多个列，则这些列的组合值必须唯一。
+
+为了创建多个列组成的主键，应该以逗号分隔的列表给出各列名。
+
+```mysql
+CREATE TABLE `orderitems` (
+  `order_num` int(11) NOT NULL,
+  `order_item` int(11) NOT NULL,
+  `prod_id` char(10) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `item_price` decimal(8,2) NOT NULL,
+  PRIMARY KEY (`order_num`,`order_item`),
+  KEY `fk_orderitems_products` (`prod_id`),
+  CONSTRAINT `fk_orderitems_orders` FOREIGN KEY (`order_num`) REFERENCES `orders` (`order_num`),
+  CONSTRAINT `fk_orderitems_products` FOREIGN KEY (`prod_id`) REFERENCES `products` (`prod_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+```
+
+### 21.1.4 使用AUTO_INCREMENT
+
+`AUTO_INCREMENT`告诉MySQL，本列每当增加一行时候自动增量。每次执行一个`INSERT`的时候，MySQL自动对该列增量。
+
+每个表只允许一个`AUTO_INCREMENT`，而且必须被索引（例如成为主键）
+
+### 21.1.5 指定默认值
+
+如果插入时没有给出值，MySQL允许使用默认值。通过`CREATE TABLE`语句的列定义中的`DEFAULT`关键字指定。 
+
+## 21.2 更新表
+
+为了更新表定义，可以使用`ALTER TABLE`语句。
+
++ 在`ALTER TABLE`之后给出要更改的表名。
++ 所做更改的列表
+
+下面例子给表添加一个列：
+
+```mysql
+alter TABLE vendors add vend_phone char(20);
+```
+
+删除刚刚添加的列.
+
+```mysql
+alter table vendors drop column vend_phone;
+```
+
+## 21.3 删除表
+
+删除表非常简单，使用`DROP TABLE`语句即可。
+
+```mysql
+drop table customers2;
+```
+
+## 21.4 重命名表
+
+```mysql
+RENAME TABLE customers2 TO customers;
+
+RENAME TABLE table1 TO table2, table3 TO table4;
+```
+
+## 21.5 小结
+
+本章介绍了几条新SQL语句。
+
+`CREATE TABLE` 用来创建新表
+
+`ALTER TABLE`用来更改表列
+
+`DROP TABLE`用来完整的删除一个表
+
+# 第22章 使用视图
+
+本章介绍视图是什么，怎么工作，如何使用。
+
+## 22.1 视图
+
+视图是虚拟的表。视图只包含使用时动态检索数据的查询。
+
+### 22.1.1 为什么使用视图
+
++ 重用SQL语句
++ 检查复杂的SQL操作
++ 使用表的组成部分而不是整个表
++ 保护数据
++ 更改数据格式和表示
+
+在视图创建之后，可以用与表基本相同的方式利用它们。可以对视 图执行SELECT操作，过滤和排序数据，将视图联结到其他视图或表，甚 至能添加和更新数据（添加和更新数据存在某些限制。关于这个内容稍 后还要做进一步的介绍）。
+
+重要的是知道视图仅仅是用来查看存储在别处的数据的一种设施。 视图本身不包含数据，因此它们返回的数据是从其他表中检索出来的。 在添加或更改这些表中的数据时，视图将返回改变过的数据。
+
+> 性能问题    因为视图不包含数据，所以每次使用视图时，都必须处理查询执行时所需的任一个检索。如果你用多个联结和过滤创建了复杂的视图或者嵌套了视图，可能会发现性能下降得很厉害。
+
+### 22.1.2 关于视图的规则和限制
+
++ 与表一样，视图必须唯一命名
++ 对于可以创建的视图数目没有限制
++ 为了创建视图，必须具有足够的访问权限。这些限制通常由数据库管理人员授予
++ 视图可以嵌套，即可以利用从其他视图中检索数据的查询来构造一个视图。
++ ORDER BY可以用在视图中，但如果从该视图检索数据SELECT中也含有ORDER BY，那么该视图中的ORDER BY将被覆盖。
++ 视图不能索引，也不能有关联的触发器或默认值。
++ 视图可以和表一起使用。例如，编写一条联结表和视图的SELECT语句。
+
+
+## 22.2 使用视图
+
++ 视图用`CREATE VIEW`语句来创建。
++ 使用`SHOW CREATE VIEW viewname；`来查看创建视图的语句。
++ 用DROP删除视图，其语法为`DROP VIEW viewname;`。
++ 更新视图时，可以先用DROP再用CREATE，也可以直接用CREATE OR REPLACE VIEW。如果要更新的视图不存在，则第2条更新语句会创建一个视图；如果要更新的视图存在， 则第 2条更新语句会替换原有视图。
+
+
+### 22.2.1 用视图简化复杂的联结
+
+视图的最常见的应用之一是隐藏复杂的SQL，这通常都会涉及联结。 请看下面的例子：
+
+```mysql
+create view productcustomers as SELECT cust_name,cust_contact, prod_id from customers,orders,orderitems
+where customers.cust_id = orders.cust_id and orderitems.order_num = orders.order_num;
+```
+
+分析：这条语句创建一个名为productcustomers的视图，它联结三个 表， 以返回已订购了任意产品的所有客户的列表。 如果执行 SELECT * FROM productcustomers，将列出订购了任意产品的客户。
+
+为了检索订购了产品`TNT2`的客户，可以如下进行
+
+```mysql
+SELECT cust_name,cust_contact from productcustomers where prod_id = 'TNT2';
+```
+
+### 22.2.5 更新视图
+
+迄今为止的所有视图都是和SELECT语句使用的。然而，视图的数据 能否更新？答案视情况而定。
+
+通常， 视图是可更新的（即， 可以对它们使用 INSERT 、 UPDATE 和 DELETE）。更新一个视图将更新其基表（可以回忆一下，视图本身没有数 据）。如果你对视图增加或删除行，实际上是对其基表增加或删除行。
+
+但是，并非所有视图都是可更新的。基本上可以说，如果MySQL不 能正确地确定被更新的基数据，则不允许更新（包括插入和删除）。这实 际上意味着，如果视图定义中有以下操作，则不能进行视图的更新：
+
++ 分组（使用了`GROUP BY`和`HAVING`）
++ 联结
++ 子查询
++ 并
++ 聚集函数（`MIN()`/`COUNT()`/`SUM()`等）
++ `DISTINCT`
++ 导出（计算）列
+
+## 22.3 小结
+
+视图为虚拟的表。它们包含的不是数据而是根据需要检索数据的查 询。视图提供了一种MySQL的SELECT语句层次的封装，可用来简化数据 处理以及重新格式化基础数据或保护基础数据。
+
+# 第23章 使用存储过程
+
+本章介绍什么是存储过程，为什么要使用存储过程以及如何使用存 储过程，并且介绍创建和使用存储过程的基本语法。
+
+## 23.1 存储过程
+
+迄今为止，使用的大多数SQL语句都是针对一个或多个表的单条语 句。并非所有操作都这么简单，经常会有一个完整的操作需要多条语句 才能完成。例如，考虑以下的情形。
+
++ 为了处理订单，需要核对以保证库存中有相应的物品。
++ 如果库存有物品，这些物品需要预定以便不将它们再卖给别的人，并且要减少可用的物品数量以反映正确的库存量。
++ 库存中没有的物品需要订购，这需要与供应商进行某种交互。
++ 关于哪些物品入库（并且可以立即发货）和哪些物品退订，需要通知相应的客户。
+
+
+可以创建存储过程。存储过程简单来说，就是为以后的使用而保存 的一条或多条MySQL语句的集合。可将其视为批文件，虽然它们的作用 不仅限于批处理。
+
+## 23.2 为什么要使用存储过程
+
+既然我们知道了什么是存储过程，那么为什么要使用它们呢？有许 多理由，下面列出一些主要的理由。
+
++ 通过把处理封装在容易使用的单元中，简化复杂的操作（正如前 面例子所述）。
++ 由于不要求反复建立一系列处理步骤，这保证了数据的完整性。 如果所有开发人员和应用程序都使用同一（试验和测试）存储过 程，则所使用的代码都是相同的。
++ 简化对变动的管理。如果表名、列名或业务逻辑（或别的内容） 有变化，只需要更改存储过程的代码。使用它的人员甚至不需要 知道这些变化。
++ 提高性能。因为使用存储过程比使用单独的SQL语句要快。
++ 存在一些只能用在单个请求中的MySQL元素和特性，存储过程可以使用它们来编写功能更强更灵活的代码
+
+## 23.3 使用存储过程
+
+### 23.3.1 执行存储过程
+
+MySQL称存储过程的执行为调用，因此MySQL执行存储过程的语句 为CALL。CALL接受存储过程的名字以及需要传递给它的任意参数。请看 以下例子：
+
+```mysql
+call productpricing(@pricelow,@pricehigh,@priceaverage);
+```
+
+### 23.3.2 创建存储过程
+
+正如所述，编写存储过程并不是微不足道的事情。为让你了解这个 过程，请看一个例子——一个返回产品平均价格的存储过程。
+
+```mysql
+create PROCEDURE productpricing()
+BEGIN
+	SELECT AVG(prod_price) as item_price
+	from products;
+END;
+```
+
+分析：我们稍后介绍第一条和最后一条语句。 此存储过程名为 productpricing ， 用 CREATE PROCEDURE productpricing() 语 句定义。如果存储过程接受参数，它们将在()中列举出来。此存储过程没 有参数，但后跟的()仍然需要。BEGIN和END语句用来限定存储过程体，过 程体本身仅是一个简单的SELECT语句（使用第12章介绍的Avg()函数）。
+
+如何使用这个存储过程？
+
+```mysql
+call productpricing();
+```
+
+分析：CALL productpricing(); 执行刚创建的存储过程并显示返回的结果。因为存储过程实际上是一种函数，所以存储过程名后 需要有()符号（即使不传递参数也需要）。
+
+### 23.3.3 删除存储过程
+
+```mysql
+drop PROCEDURE productpricing;
+```
+
+### 23.3.4 使用参数
+
+productpricing只是一个简单的存储过程，它简单地显示SELECT语 句的结果。一般，存储过程并不显示结果，而是把结果返回给你指定的变量。
+
+> 变量 内存中一个特定的位置，用来临时存储数据。
+
+以下是productpricing的修改版本（如果不先删除此存储过程，则 不能再次创建它）：
+
+```mysql
+create PROCEDURE productpricing(
+	OUT pl DECIMAL(8,2),
+	OUT ph DECIMAL(8,2),
+	OUT pa DECIMAL(8,2)
+)
+BEGIN
+	SELECT MIN(prod_price)
+	into pl
+	from products;
+	SELECT MAX(prod_price)
+	into ph
+	from products;
+	SELECT AVG(prod_price)
+	into pa
+	from products;
+END;
+```
+
+分析：此存储过程接受3个参数：pl存储产品最低价格，ph存储产品 最高价格，pa存储产品平均价格。每个参数必须具有指定的类 型，这里使用十进制值。关键字OUT指出相应的参数用来从存储过程传出 一个值（返回给调用者）。MySQL支持IN（传递给存储过程）、OUT（从存 储过程传出，如这里所用）和INOUT（对存储过程传入和传出）类型的参 数。存储过程的代码位于BEGIN和END语句内，如前所见，它们是一系列 SELECT语句，用来检索值，然后保存到相应的变量（通过指定INTO关键 字）。
+
+为了调用这个存储过程。必须指定3个变量名。
+
+```mysql
+CALL productpricing(@pricelow, @pricehigh, @priceaverage);
+```
+
+为了获得三个值，可以使用以下语句：
+
+```mysql
+SELECT @pricelow, @pricehigh, @priceaverage;
+```
+
+### 23.3.5 建立只能存储过程
+
+迄今为止使用的所有存储过程基本上都是封装MySQL简单的SELECT 语句。虽然它们全都是有效的存储过程例子，但它们所能完成的工作你 直接用这些被封装的语句就能完成（如果说它们还能带来更多的东西，那就是使事情更复杂）。只有在存储过程内包含业务规则和智能处理时， 它们的威力才真正显现出来。
+
+考虑这个场景。你需要获得与以前一样的订单合计，但需要对合计 增加营业税，不过只针对某些顾客（或许是你所在州中那些顾客）。那么， 你需要做下面几件事情：
+
++ 获得合计
++ 把营业税有条件的添加到合计
++ 返回合计
+
+```mysql
+create PROCEDURE ordertotal(
+	IN onumber INT,
+	OUT ototal DECIMAL(8,2)
+)
+BEGIN
+	DECLARE total DECIMAL(8.2);
+	DECLARE taxrate INT DEFAULT 6;
+	SELECT SUM(item_price*quantity)
+	FROM orderitems
+	WHERE order_num=onumber
+	into total;
+	
+	SELECT total into ototal;
+END
+```
+
+分析：在存储过程复杂性增加时，这样做特别重要。添加了另外一个 参数taxable，它是一个布尔值（如果要增加税则为真，否则为假）。在 存储过程体中，用DECLARE语句定义了两个局部变量。DECLARE要求指定 变量名和数据类型，它也支持可选的默认值（这个例子中的taxrate的默 认被设置为6%）。SELECT语句已经改变，因此其结果存储到total（局部 变量）而不是ototal。IF语句检查taxable是否为真，如果为真，则用另 一SELECT语句增加营业税到局部变量total。最后，用另一SELECT语句将 total（它增加或许不增加营业税）保存到ototal。
+
+看看调用
+
+```mysql
+call ordertotal(20005 ,@total);
+select @total;
+```
+
+### 23.3.6 检查存储过程
+
+为显示用来创建一个存储过程的 CREATE 语句， 使用 `SHOW CREATE PROCEDURE`语句：
+
+为了获得包括何时、由谁创建等详细信息的存储过程列表，使用`SHOW PROCEDURE STATUS`。
+
+> 限制过程状态结果  SHOW PROCEDURE STATUS列出所有存储过程。为限制其输出，例如：show PROCEDURE STATUS where Db='crashcourse';
+>
+
+## 23.4 小结
+
+本章介绍了什么是存储过程以及为什么要使用存储过程。我们介绍 了存储过程的执行和创建的语法以及使用存储过程的一些方法。
+
+# 第24章 使用游标
+
+## 24.1 游标
+
+有时，需要在检索出来的行中前进或后退一行或多行。这就是使用 游标的原因。
+
+游标（cursor）是一个存储在MySQL服 它不是一条SELECT语句，而是被该语句检索出来的结果集。
+
+## 24.2 使用游标
+
++ 在能够使用游标前，必须声明（定义）它。这个过程实际上没有 检索数据，它只是定义要使用的SELECT语句。
+
++ 一旦声明后， 必须打开游标以供使用。 这个过程用前面定义的SELECT语句把数据实际检索出来。
+
++ 对于填有数据的游标，根据需要取出（检索）各行。
+
++ 在结束游标使用时，必须关闭游标。
+
+在声明游标后，可根据需要频繁地打开和关闭游标。在游标打开后， 可根据需要频繁地执行取操作。
+
+### 24.2.1 创建游标
+
+游标用DECLARE语句创建（参见第23章）。DECLARE命名游标，并定义 相应的SELECT语句，根据需要带WHERE和其他子句。例如，下面的语句定 义了名为ordernumbers的游标，使用了可以检索所有订单的SELECT语句。
+
+```mysql
+create PROCEDURE processorders()
+BEGIN
+	DECLARE ordernumbers CURSOR
+	FOR SELECT order_num from orders;
+END;
+```
+
+分析：这个存储过程并没有做很多事情，DECLARE语句用来定义和命 名游标，这里为ordernumbers。存储过程处理完成后，游标就 消失（因为它局限于存储过程）。
+
+### 24.2.2 打开和关闭游标
+
+游标用`OPEN CURSOR`语句来打开：
+
+```mysql
+open ordernumbers;
+```
+
+分析：在处理OPEN语句时执行查询，存储检索出的数据以供浏览和滚 动。
+
+游标处理完成后，应当使用如下语句关闭游标：
+
+```mysql
+CLOSE ordernumbers;
+```
+
+分析：CLOSE释放游标使用的所有内部内存和资源，因此在每个游标 不再需要时都应该关闭。
+
+在一个游标关闭后，如果没有重新打开，则不能使用它。但是，使用声明过的游标不需要再次声明，用OPEN语句打开它就可以了。
+
+下面是前面例子的修改版本：
+
+```mysql
+create PROCEDURE processorders()
+BEGIN
+	DECLARE ordernumbers CURSOR
+	FOR SELECT order_num from orders;
+	
+	open ordernumbers;
+	CLOSE ordernumbers;
+END;
+```
+
+分析：这个存储过程声明、打开和关闭一个游标。但对检索出的数据 什么也没做。
+
+### 24.2.3 使用游标数据
+
+在一个游标被打开后，可以使用`FETCH`语句分别访问它的每一行。 FETCH指定检索什么数据（所需的列），检索出来的数据存储在什么地方。 它还向前移动游标中的内部行指针，使下一条FETCH语句检索下一行（不 重复读取同一行）。
+
+```mysql
+create PROCEDURE processorders()
+BEGIN
+	DECLARE o INT;
+
+	DECLARE ordernumbers CURSOR
+	FOR SELECT order_num from orders;
+	
+	open ordernumbers;
+	
+	FETCH ordernumbers into o;
+	
+	CLOSE ordernumbers;
+END;
+```
+
+分析：其中FETCH用来检索当前行的order_num列（将自动从第一行开 始）到一个名为o的局部声明的变量中。对检索出的数据不做 任何处理。
+
+下一个例子中，循环检索数据，从第一行到最后一行。
+
+```mysql
+create PROCEDURE processorders()
+BEGIN
+	DECLARE o INT;
+	DECLARE done TINYINT default 0;
+
+	DECLARE ordernumbers CURSOR
+	
+	FOR SELECT order_num from orders;
+	DECLARE CONTINUE HANDLER for SQLSTATE '02000' SET done=1;
+	
+	open ordernumbers;
+	repeat
+	
+		FETCH ordernumbers into o;
+	UNTIL done=1 END REPEAT;
+	
+	CLOSE ordernumbers;
+END;
+```
+
+分析：与前一个例子一样，这个例子使用 FETCH 检索当前 order_num 到声明的名为o的变量中。但与前一个例子不一样的是，这个 例子中的FETCH是在REPEAT内，因此它反复执行直到done为真（由UNTIL done END REPEAT;规定）。为使它起作用，用一个DEFAULT 0（假，不结 束）定义变量done。
+
+## 24.3 小结
+
+本章介绍了什么是游标以及为什么要使用游标，举了演示基本游标 使用的例子，并且讲解了对游标结果进行循环以及逐行处理的技术。
