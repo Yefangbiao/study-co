@@ -2023,3 +2023,60 @@ INSERT SELECT中SELECT语句可包含WHERE子句以过滤插入的数据。
 
 本章介绍如何将行插入到数据库表。我们学习了使用`INSERT`的几种 方法，以及为什么要明确使用列名，学习了如何用`INSERT SELECT`从其他 表中导入行。下一章讲述如何使用`UPDATE`和`DELETE`进一步操纵表数据。
 
+# 第20 章 更新和删除数据
+
+## 20.1 更新数据
+
+为了更新(修改)表中的数据，可使用UPDATE语句。可采用两种方 式使用UPDATE:
+
++ 更新表中特定行
++ 更新表中所有行
+
+UPDATE语句非常容易使用，甚至可以说是太容易使用了。基本的 UPDATE语句由3部分组成，分别是:
+
++ 要更新的表
++ 列名和它们的新值
++ 确定要更新行的过滤条件
+
+```mysql
+UPDATE customers set cust_email = 'elemer@fudd.com' where cust_id = 10005;
+```
+
+UPDATE语句总是以要更新的表的名字开始。在此例子中，要更新的 表的名字为customers。SET命令用来将新值赋给被更新的列。如这里所 示，SET子句设置cust_email列为指定的值.
+
+UPDATE语句以WHERE子句结束，它告诉MySQL更新哪一行。没有 WHERE子句，MySQL将会用这个电子邮件地址更新customers表中所有 行，这不是我们所希望的。
+
+```mysql
+UPDATE customers set cust_name = 'The Fudds',cust_email='elmer@fudd.com' where cust_id=10005;
+```
+
+在更新多个列时，只需要使用单个SET命令，每个“列=值”对之间 用逗号分隔(最后一列之后不用逗号)。在此例子中，更新客户10005的 cust_name和cust_email列。
+
+为了删除某个列的值，可设置它为NULL(假如表定义允许NULL值)。
+
+## 20.2 删除数据
+
+为了从一个表中删除(去掉)数据，使用DELETE语句。可以两种方 式使用DELETE:
+
++ 从表中删除特定的行
++ 从表中删除所有行
+
+下面的语句从customers表中删除一行:
+
+```mysql
+DELETE from customers where cust_id=10006;
+```
+
+## 20.3 更新和删除的指导原则
+
+前一节中使用的UPDATE和DELETE语句全都具有WHERE子句，这样做的 理由很充分。如果省略了WHERE子句，则UPDATE或DELETE将被应用到表中 190 所有的行。换句话说，如果执行UPDATE而不带WHERE子句，则表中每个行 都将用新值更新。类似地，如果执行DELETE语句而不带WHERE子句，表的所有数据都将被删除。
+
++ 除非确实打算更新和删除每一行，否则绝对不要使用不带WHERE 子句的UPDATE或DELETE语句。
++ 保证每个表都有主键(如果忘记这个内容，请参阅第15章)，尽可能 像WHERE子句那样使用它(可以指定各主键、多个值或值的范围)。
++ 在对UPDATE或DELETE语句使用WHERE子句前，应该先用SELECT进 行测试，保证它过滤的是正确的记录，以防编写的WHERE子句不 正确。
++ 使用强制实施引用完整性的数据库(关于这个内容，请参阅第15 章)，这样MySQL将不允许删除具有与其他表相关联的数据的行。
+
+## 20.4 小结
+
+我们在本章中学习了如何使用`UPDATE`和`DELETE`语句处理表中的数 据。我们学习了这些语句的语法，知道了它们固有的危险性。本章中还 讲解了为什么`WHERE`子句对`UPDATE`和`DELETE`语句很重要，并且给出了应该 遵循的一些指导原则，以保证数据的安全。
+
