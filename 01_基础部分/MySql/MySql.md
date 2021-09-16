@@ -1943,3 +1943,83 @@ mysql> select note_text from productnotes where match(note_text) against('+safe 
 
 本章介绍了为什么要使用全文本搜索， 以及如何使用MySQL的 `Match()`和`Against()`函数进行全文本搜索。我们还学习了查询扩展（它 能增加找到相关匹配的机会）和如何使用布尔方式进行更细致的查找控 制。
 
+# 第19章 插入数据
+
+本章介绍如何利用SQL的INSERT语句将数据插入表中。
+
+## 19.1 数据插入
+
+毫无疑问，SELECT是最常使用的SQL语句了(这就是为什么前17章 讲的都是它的原因)。但是，还有其他3个经常使用的SQL语句需要学习。 第一个就是INSERT(下一章介绍另外两个)。
+
+顾名思义，INSERT是用来插入(或添加)行到数据库表的。插入可 以用几种方式使用:
+
++ 插入完整的行
++ 插入行的一部分
++ 插入多行
++ 插入某些查询的结果
+
+## 19.2 插入完整的行
+
+把数据插入表中的最简单的方法是使用基本的INSERT语法，它要求指定表名和被插入到新行中的值。下面举一个例子:
+
+```mysql
+mysql> insert into customers values(null, 'Pep E. LaPew', '100 Main Street', 'Los Angeles', 'CA', '90046', 'USA', NULL, NULL);
+Query OK, 1 row affected (0.01 sec)
+```
+
+分析:此例子插入一个新客户到customers表。存储到每个表列中的
+
+数据在VALUES子句中给出，对每个列必须提供一个值。如果某 个列没有值(如上面的cust_contact和cust_email列)，应该使用NULL 值(假定表允许对该列指定空值)。
+
+第一列cust_id也为NULL。这是因为每次插入一个新行时，该 列由MySQL自动增量。
+
+
+
+虽然这种语法很简单，但并不安全，应该尽量避免使用。
+
+编写INSERT语句的更安全(不过更烦琐)的方法如下:
+
+```mysql
+insert into customers(cust_name,cust_contact,cust_email,cust_address,cust_city,cust_state,cust_zip,cust_country)
+VALUES('Pep E',NULL,NULL,'100 Main Street','Los Angeles','CA','90046','USA');
+```
+
+> 总是使用列的列表  一般不要使用没有明确给出列的列表的 INSERT语句。使用列的列表能使SQL代码继续发挥作用，即使 表结构发生了变化。
+
+> 省略列 如果表的定义允许，则可以在INSERT操作中省略某 些列。省略的列必须满足以下某个条件。
+>
+> 1.该列定义为允许NULL值(无值或空值)。2.在表定义中给出默认值。这表示如果不给出值，将使用默
+>
+> 认值。
+
+## 19.3 插入多个行
+
+可以使用多条INSERT语句，甚至一次提交它们，每条语句用一个分号结束
+
+或者，只要每条INSERT语句中的列名(和次序)相同，可以如下组 合各语句:
+
+```mysql
+insert into customers(cust_name,cust_address,cust_city,cust_state,cust_zip,cust_country)
+VALUES('Pep E','100 Main Street','Los Angeles','CA','90046','USA'),
+('M. Martian', '42 Galaxy way','New York', 'NY','11213','USA');
+```
+
+## 19.4 插入检索的数据
+
+INSERT一般用来给表插入一个指定列值的行。但是，INSERT还存在 另一种形式，可以利用它将一条SELECT语句的结果插入表中。这就是所 谓的INSERT SELECT，顾名思义，它是由一条INSERT语句和一条SELECT 语句组成的。
+
+假如你想从另一表中合并客户列表到你的customers表。不需要每次 读取一行，然后再将它用INSERT插入，可以如下进行:
+
+```mysql
+insert into customers(cust_name,cust_address,cust_city)
+SELECT cust_name,cust_address,cust_city from newcustomers;
+```
+
+分析:这个例子使用INSERT SELECT从newcustomers中将所有数据导入customers。SELECT语句从newcustomers检索出要插入的值，而不 是列出它们。
+
+INSERT SELECT中SELECT语句可包含WHERE子句以过滤插入的数据。
+
+## 19.5 小结
+
+本章介绍如何将行插入到数据库表。我们学习了使用`INSERT`的几种 方法，以及为什么要明确使用列名，学习了如何用`INSERT SELECT`从其他 表中导入行。下一章讲述如何使用`UPDATE`和`DELETE`进一步操纵表数据。
+
