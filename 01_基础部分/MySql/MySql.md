@@ -2750,3 +2750,301 @@ SET autocommit=0;
 
 本章介绍了事务处理是必须完整执行的SQL语句块。我们学习了如何 使用COMMIT和ROLLBACK语句对何时写数据，何时撤销进行明确的管理。 还学习了如何使用保留点对回退操作提供更强大的控制。
 
+# 第27章 全球化和本地化
+
+## 27.1 字符集和校对顺序
+
+数据库表被用来存储和检索数据。不同的语言和字符集需要以不同 的方式存储和检索。因此，MySQL需要适应不同的字符集(不同的字母 和字符)，适应不同的排序和检索数据的方法。
+
+在讨论多种语言和字符集时，将会遇到以下重要术语:
+
++ 字符集为字母和符号的集合;
++ 编码为某个字符集成员的内部表示;
++ 校对为规定字符如何比较的指令。
+
+## 27.2 使用字符集和校对顺序
+
+MySQL支持众多的字符集。为查看所支持的字符集完整列表，使用
+
+以下语句:
+
+```MYSQL
+SHOW CHARACTER SET;
+```
+
+为了查看支持校对的完整列表,使用以下语句:
+
+```mysql
+SHOW COLLATION;
+```
+
+一般，MySQL如下确定使用什么样的字符集和校对。
+
++ 如果指定`CHARACTER SET`和`COLLATE`两者，则使用这些值。
++ 如果只指定`CHARACTER SET`，则使用此字符集及其默认的校对(如`SHOW CHARACTER SET`的结果中所示)。
++ 如果既不指定`CHARACTER SET`，也不指定`COLLATE`，则使用数据库默认。
+
+## 27.3 小结
+
+本章中，我们学习了字符集和校对的基础知识，还学习了如何对特定的表和列定义字符集和校对，如何在需要时使用备用的校对。
+
+# 第28章 安全管理
+
+## 28.1 访问控制
+
+MySQL服务器的安全基础是:用户应该对他们需要的数据具有适当 的访问权，既不能多也不能少。换句话说，用户不能对过多的数据具有 过多的访问权。
+
+这些都只是例子，但有助于说明一个重要的事实，即你需要给用户 提供他们所需的访问权，且仅提供他们所需的访问权。这就是所谓的访 问控制，管理访问控制需要创建和管理用户账号。
+
+## 28.2 管理用户
+
+MySQL用户账号和信息存储在名为mysql的MySQL数据库中。一般 不需要直接访问mysql数据库和表.需要直接访问它的时机之一是在需要获得所有用户账号列表.
+
+```mysql
+select user from user;
+```
+
+### 28.2.1 创建用户账号
+
+为了创建一个新用户账号，使用`CREATE USER`语句，如下所示
+
+```mysql
+CREATE USER ben IDENTIFIED BY '123456';
+```
+
+CREATE USER创建一个新用户账号。在创建用户账号时不一定需 要口令
+
+> 指定散列口令  IDENTIFIEDBY指定的口令为纯文本，MySQL 将在保存到user表之前对其进行加密。为了作为散列值指定口 令，使用IDENTIFIED BY PASSWORD。
+
+### 28.2.2 删除用户账号
+
+为了删除一个用户账号(以及相关的权限)，使用`DROP USER`语句
+
+```mysql
+DROP USER ben;
+```
+
+### 28.2.3 设置访问权限
+
+在创建用户账号后，必须接着分配访问权限。新创建的用户账号没有访问权限。它们能登录MySQL，但不能看到数据，不能执行任何数据库操作。
+
+```mysql
+show grants for ben;
+```
+
+分析:输出结果显示用户bforta有一个权限USAGE ON *.*。USAGE表示根本没有权限(我知道，这不很直观)，所以，此结果表示在 任意数据库和任意表上对任何东西没有权限。
+
+为设置权限，使用`GRANT`语句。GRANT要求你至少给出以下信息:
+
++ 要授予的权限
++ 被授予访问权限的数据库或表
++ 用户名
+
+以下例子给出GRANT的用法:
+
+```mysql
+GRANT SELECT on crashcourse.* TO ben;
+```
+
+分析:此GRANT允许用户在crashcourse.*(crashcourse数据库的所有表)上使用SELECT。通过只授予SELECT访问权限，用户bforta 对crashcourse数据库中的所有数据具有只读访问权限。
+
+`GRANT`的反操作为`REVOKE`，用它来撤销特定的权限。下面举一个例子:
+
+```mysql
+REVOKE SELECT ON crashcourse.* FROM ben;
+```
+
+`GRANT`和`REVOKE`可在几个层次上控制访问权限:
+
++ 整个服务器，使用`GRANT ALL`和`REVOKE ALL;`
++ 整个数据库，使用`ON database.*;`
++ 特定的表，使用`ON database.table`;
++ 特定的列;
++ 特定的存储过程;
+
+下表列出可以授予或撤销的每个权限.
+
+| 权限                   | 说明                                                         |
+| ---------------------- | ------------------------------------------------------------ |
+| ALL                    | 除GRANT OPTION外的所有权限                                   |
+| ALTER                  | 使用ALTER TABLE                                              |
+| ALTER ROUTINE          | 使用ALTER PROCEDURE和DROP PROCEDURE                          |
+| CREATE                 | 使用CREATE TABLE                                             |
+| CREATE ROUTINE         | 使用CREATE PROCEDURE                                         |
+| CREATE TEMPORARY TABLE | 使用CREATE TEMPORARY TABLE                                   |
+| CREATE USER            | 使用CREATE USER、DROP USER、RENAME USER和REVOKE ALL PRIVILEGES |
+| CREATE VIEW            | 使用CREATE VIEW                                              |
+| DELETE                 | 使用DELETE                                                   |
+| DROP                   | 使用DROP TABLE                                               |
+| EXECUTE                | 使用CALL和存储过程                                           |
+| FILE                   | 使用SELECT INTO OUTFILE和LOAD DATA INFILE                    |
+| GRANT OPTION           | 使用GRANT和REVOKE                                            |
+| INDEX                  | 使用CREATE INDEX和DROP INDEX                                 |
+| INSERT                 | 使用INSERT                                                   |
+| LOCK TABLES            | 使用LOCK TABLES                                              |
+| PROCESS                | 使用SHOW FULL PROCESSLIST                                    |
+| RELOAD                 | 使用FLUSH                                                    |
+| REPLICATION CLIENT     | 服务器位置的访问                                             |
+| REPLICATION SLAVE      | 由复制从属使用                                               |
+| SELECT                 | 使用SELECT                                                   |
+| SHOW DATABASES         | 使用SHOW DATABASES                                           |
+| SHOW VIEW              | 使用SHOW CREATE VIEW                                         |
+| SHUTDOWN               | 使用mysqladmin shutdown(用来关闭MySQL)                       |
+| SUPER                  | 使用CHANGE MASTER、KILL、LOGS、PURGE、MASTER 和SET GLOBAL。还允许mysqladmin调试登录 |
+| UPDATE                 | 使用UPDATE                                                   |
+| USAGE                  | 无访问权限                                                   |
+
+### 28.2.4 更改口令
+
+为了更改用户口令，可使用SET PASSWORD语句。新口令必须如下加密:
+
+```mysql
+SET PASSWORD for ben = PASSWORD('123');
+```
+
+## 28.3 小结
+
+本章学习了通过赋予用户特殊的权限进行访问控制和保护MySQL服务器.
+
+# 第29章 数据库维护
+
+## 29.1 备份数据
+
+像所有数据一样，MySQL的数据也必须经常备份。由于MySQL数据 库是基于磁盘的文件，普通的备份系统和例程就能备份MySQL的数据。 但是，由于这些文件总是处于打开和使用状态，普通的文件副本备份不 一定总是有效。
+
+下面列出这个问题的可能解决方案。
+
++ 使用命令行实用程序mysqldump转储所有数据库内容到某个外部 文件。在进行常规备份前这个实用程序应该正常运行，以便能正 确地备份转储文件。
++ 可用命令行实用程序mysqlhotcopy从一个数据库复制所有数据 (并非所有数据库引擎都支持这个实用程序)。
++ 可以使用MySQL的BACKUP TABLE或SELECT INTO OUTFILE转储所 有数据到某个外部文件。这两条语句都接受将要创建的系统文件 名，此系统文件必须不存在，否则会出错。数据可以用RESTORE TABLE来复原。
+
+## 29.2 进行数据库维护
+
+MySQL提供了一系列的语句，可以(应该)用来保证数据库正确和 正常运行。
+
+以下是你应该知道的一些语句。
+
++ `ANALYZE TABLE`用来检查表键是否正确。ANALYZE TABLE返回如 下所示的状态信息:
+
+```mysql
+ANALYZE TABLE orders;
+```
+
+## 29.3 诊断启动问题
+
+服务器启动问题通常在对MySQL配置或服务器本身进行更改时出 现。MySQL在这个问题发生时报告错误，但由于多数MySQL服务器是作 为系统进程或服务自动启动的，这些消息可能看不到。
+
+在排除系统启动问题时，首先应该尽量用手动启动服务器。MySQL 服务器自身通过在命令行上执行mysqld启动。下面是几个重要的mysqld 命令行选项:
+
++ --help 显示帮助
++ --safe-mode装在减去某些最佳配置的服务器
++ --verbose显示全文本信息
++ --version显示版本信息后退出
+
+## 29.4 查看日志文件
+
+MySQL维护管理员依赖的一系列日志文件。主要的日志文件有以下几种。
+
++ 错误日志。它包含启动和关闭问题以及任意关键错误的细节。此 日志通常名为hostname.err，位于data目录中。此日志名可用 --log-error命令行选项更改。
++ 查询日志。它记录所有MySQL活动，在诊断问题时非常有用。此 日志文件可能会很快地变得非常大，因此不应该长期使用它。此 日志通常名为hostname.log，位于data目录中。此名字可以用 --log命令行选项更改。
++ 二进制日志。它记录更新过数据(或者可能更新过数据)的所有 语句。此日志通常名为hostname-bin，位于data目录内。此名字 可以用--log-bin命令行选项更改。
++  缓慢查询日志。顾名思义，此日志记录执行缓慢的任何查询。这 个日志在确定数据库何处需要优化很有用。此日志通常名为 hostname-slow.log，位于data目录中。此名字可以用--log-slow-queries命令行选项更改。
+
+## 29.5 小结
+
+本章介绍了MySQL数据库的某些维护工具和技术。
+
+## 第30章 改善性能
+
+## 30.1 改善性能
+
++ 首先，MySQL(与所有DBMS一样)具有特定的硬件建议。在学 习和研究MySQL时，使用任何旧的计算机作为服务器都可以。但 对用于生产的服务器来说，应该坚持遵循这些硬件建议。
++ 一般来说，关键的生产DBMS应该运行在自己的专用服务器上。
++  MySQL是用一系列的默认设置预先配置的，从这些设置开始通常 是很好的。但过一段时间后你可能需要调整内存分配、缓冲区大 小等。(为查看当前设置，可使用SHOW VARIABLES;和SHOWSTATUS;。)
++ MySQL一个多用户多线程的DBMS，换言之，它经常同时执行多个任务。如果这些任务中的某一个执行缓慢，则所有请求都会执 行缓慢。如果你遇到显著的性能不良，可使用SHOW PROCESSLIST 显示所有活动进程(以及它们的线程ID和执行时间)。你还可以用KILL命令终结某个特定的进程(使用这个命令需要作为管理员登录)。
++ 总是有不止一种方法编写同一条SELECT语句。应该试验联结、并、子查询等，找出最佳的方法。
++ 使用EXPLAIN语句让MySQL解释它将如何执行一条SELECT语句。
++ 一般来说，存储过程执行得比一条一条地执行其中的各条MySQL语句快。
++ 应该总是使用正确的数据类型。
++ 决不要检索比需求还要多的数据。换言之，不要用SELECT *(除非你真正需要每个列)。
++ 有的操作(包括INSERT)支持一个可选的DELAYED关键字，如果使用它，将把控制立即返回给调用程序，并且一旦有可能就实际执行该操作。
++ 在导入数据时，应该关闭自动提交。你可能还想删除索引(包括FULLTEXT索引)，然后在导入完成后再重建它们。
++  必须索引数据库表以改善数据检索的性能。确定索引什么不是一 件微不足道的任务，需要分析使用的SELECT语句以找出重复的 WHERE和ORDER BY子句。如果一个简单的WHERE子句返回结果所花 的时间太长，则可以断定其中使用的列(或几个列)就是需要索引的对象。
++ 你的SELECT语句中有一系列复杂的OR条件吗?通过使用多条SELECT语句和连接它们的UNION语句，你能看到极大的性能改进。
++  索引改善数据检索的性能，但损害数据插入、删除和更新的性能。如果你有一些表，它们收集数据且不经常被搜索，则在有必要之前不要索引它们。(索引可根据需要添加和删除。)
++ LIKE很慢。一般来说，最好是使用FULLTEXT而不是LIKE。
++ 数据库是不断变化的实体。一组优化良好的表一会儿后可能就面目全非了。由于表的使用和内容的更改，理想的优化和配置也会改变。
++ 最重要的规则就是，每条规则在某些条件下都会被打破。
+
+## 30.2 小结
+
+本章回顾了与MySQL性能有关的某些提示和说明。当然，这只是一 小部分，不过，既然你已经完成了本书的学习，你应该能试验和掌握自 己觉得最适合的内容。
+
+# 附录A MYSQL语句的语法
+
++ ALTER TABLE:ALTER TABLE用来更新已存在表的模式。为了创建新表，应该使用CREATE TABLE。详细信息请参阅第21章。
++ COMMIT: COMMIT用来将事务处理写到数据库。详细信息请参阅第26章
++ CREATE INDEX:CREATE INDEX用于在一个或多个列上创建索引。详细请参阅第21章。
++ CREATE PROCEDURE:CREATE PROCEDURE用于创建存储过程。详细信息请参阅第23章。
++ CREATE USER:CREATE USER 用于向系统中添加新的用户账户。详细信息请参阅第28章。
++ CREATE VIEW:CREATE VIEW用来创建一个或多个表上的新视图。详细信息请参阅第 22章。
++ DELETE:DELETE从表中删除一行或多行。详细信息请参阅第20章。
++ DROP:DROP永久地删除数据库对象(表、视图、索引等)。详细信息请参 阅第21、22、23和第24章。
++ INSERT:INSERT给表增加一行。详细信息请参阅第19章。
++ INSERT SELECT:INSERT SELECT插入SELECT的结果到一个表。详细信息请参阅第19章。
++ ROLLBACK:ROLLBACK用于撤销一个事务处理块。详细信息请参阅第26章。
++ SAVEPOINT:SAVEPOINT为使用ROLLBACK语句设立保留点。详细信息请参阅第26章。
++ SELECT:SELECT用于从一个或多个表(视图)中检索数据。更多的基本信息，请参阅第4、5和第6章(第4~17章都与SELECT有关)。
++ START TRANSACTION:START TRANSACTION表示一个新的事务处理块的开始。详细信息请参阅第26章。
++ UPDATE:UPDATE更新表中一行或多行。详细信息请参阅第20章。
+
+# 附录B MySQL数据类型
+
+## B.1串数据类型
+
+| 数据类型   | 说明                                                         |
+| ---------- | ------------------------------------------------------------ |
+| CHAR       | 1~255个字符的定长串。它的长度必须在创建时指定，否则MySQL 假定为CHAR(1) |
+| ENUM       | 接受最多64 K个串组成的一个预定义集合的某个串                 |
+| LONGTEXT   | 与TEXT相同，但最大长度为4 GB                                 |
+| MEDIUMTEXT | 与TEXT相同，但最大长度为16 K                                 |
+| SET        | 接受最多64个串组成的一个预定义集合的零个或多个串             |
+| TEXT       | 最大长度为64 K的变长文本                                     |
+| TINYTEXT   | 与TEXT相同，但最大长度为255字节                              |
+| VARCHAR    | 长度可变，最多不超过255字节。如果在创建时指定为VARCHAR(n)， 则可存储0到n个字符的变长串(其中n≤255) |
+
+## B.2数值数据类型
+
+| 数据类型        | 说明                                                         |
+| --------------- | ------------------------------------------------------------ |
+| BIT             | 位字段，1~64位。(在MySQL 5之前，BIT在功能上等价于 TINYINT    |
+| BIGINT          | 整数值，支持9223372036854775808~9223372036854775807 (如果是UNSIGNED，为0~18446744073709551615)的数 |
+| BOOLEAN(或BOOL) | 布尔标志，或者为0或者为1，主要用于开/关(on/off)标志          |
+| DECIMAL(或DEC)  | 精度可变的浮点值                                             |
+| DOUBLE          | 双精度浮点值                                                 |
+| FLOAT           | 单精度浮点值                                                 |
+| INT(或INTEGER)  | 整数值，支持2147483648~2147483647(如果是UNSIGNED， 为0~4294967295)的数 |
+| MEDIUMINT       | 整数值，支持8388608~8388607(如果是UNSIGNED，为0~ 16777215)的数 |
+| REAL            | 4字节的浮点值                                                |
+| SMALLINT        | 整数值，支持-32768~32767(如果是UNSIGNED，为0~65535)的数      |
+| TINYINT         | 整数值，支持-128~127(如果为UNSIGNED，为0~255)的数            |
+
+## B.3 日期和时间数据类型
+
+| 数据类型  | 说明                                                         |
+| --------- | ------------------------------------------------------------ |
+| DATE      | 表示1000-01-01~9999-12-31的日期，格式为 YYYY-MM-DD           |
+| DATETIME  | DATE和TIME的组合                                             |
+| TIMESTAMP | 功能和DATETIME相同(但范围较小)                               |
+| TIME      | 格式为HH:MM:SS                                               |
+| YEAR      | 用2位数字表示，范围是70(1970年)~69(2069 年)，用4位数字表示，范围是1901年~2155年 |
+
+## B.4 二进制数据类型
+
+| 数据类型   | 说明                  |
+| ---------- | --------------------- |
+| BLOB       | Blob最大长度为64 KB   |
+| MEDIUMBLOB | Blob最大长度为16 MB   |
+| LONGBLOB   | Blob最大长度为4 GB    |
+| TINYBLOB   | Blob最大长度为255字节 |
+
