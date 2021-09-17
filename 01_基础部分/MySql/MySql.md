@@ -2545,3 +2545,208 @@ END;
 ## 24.3 小结
 
 本章介绍了什么是游标以及为什么要使用游标，举了演示基本游标 使用的例子，并且讲解了对游标结果进行循环以及逐行处理的技术。
+
+# 第25章 使用触发器
+
+## 25.1 触发器
+
+MySQL语句在需要时被执行，存储过程也是如此。但是，如果你 想要某条语句（或某些语句）在事件发生时自动执行， 怎么办呢？例如：
+
++ 当增加一个顾客到某个数据库表时，检查其电话号码格式是否正确。
++ 订购一个商品的时候，从库存数量中减去订购的数量
++ 无论何时删除一行，都在某个存档表中保留一个副本。
+
+所有这些例子的共同之处是它们都需要在某个表发生更改时自动 处理。这确切地说就是触发器。触发器是MySQL响应以下任意语句而 自动执行的一条MySQL语句（或位于 BEGIN 和 END 语句之间的一组语 句）：
+
++ `DELETE`
++ `INSERT`
++ `UPDATE`
+
+其他MySQL语句不支持触发器
+
+## 25.2 创建触发器
+
+在创建触发器时，需要给出4条信息：
+
++ 唯一的触发器名
++ 触发器关联的表
++ 触发器应该响应的活动
++ 触发器何时执行
+
+触发器使用`CREATE TRIGGER`语句创建，下面是一个例子
+
+```mysql
+CREATE TRIGGER newproduct after insert on products
+for each ROW select 'Product added' INTO @asd;
+```
+
+分析：CREATE TRIGGER用来创建名为newproduct的新触发器。触发器 可在一个操作发生之前或之后执行，这里给出了`AFTER INSERT`， 所以此触发器将在INSERT语句成功执行后执行。这个触发器还指定`FOR EACH ROW`，因此代码对每个插入行执行。在这个例子中，文本`Product added`将对每个插入的行显示一次。
+
+为了测试这个触发器，使用INSERT语句添加一行或多行到products 中，你将看到对每个成功的插入，显示`Product added`消息。
+
+触发器按每个表每个事件每次地定义，每个表每个事件每次只允许一个触发器。因此，每个表最多支持6个触发器（每条INSERT、UPDATE 和DELETE的之前和之后）。单一触发器不能与多个事件或多个表关联，所 以，如果你需要一个对INSERT和UPDATE操作执行的触发器，则应该定义 两个触发器。
+
+## 25.3 删除触发器
+
+现在，删除触发器的语法应该很明显了。为了删除一个触发器，可 使用`DROP TRIGGER`语句，如下所示：
+
+```mysql
+DROP TRIGGER newproduct;
+```
+
+## 25.4 使用触发器
+
+在有了前面的基础知识后，我们现在来看所支持的每种触发器类型 以及它们的差别。
+
+### 25.4.1 INSERT触发器
+
+INSERT触发器在INSERT语句执行之前或之后执行。需要知道以下几 点：
+
++ 在INSERT触发器代码内，可引用一个名为`NEW`的虚拟表，访问被 插入的行；
++ 在BEFORE INSERT触发器中，`NEW`中的值也可以被更新（允许更改被插入的值）；
++ 对于AUTO_INCREMENT列，NEW在INSERT执行之前包含0，在INSERT执行之后包含新的自动生成值。
+
+
+下面举一个例子（一个实际有用的例子）。AUTO_INCREMENT列具有 MySQL自动赋予的值。第21章建议了几种确定新生成值的方法，但下面 是一种更好的方法：
+
+```mysql
+CREATE TRIGGER neworder after insert on orders
+for EACH ROW SELECT NEW.order_num into @asd;
+```
+
+分析：此代码创建一个名为neworder的触发器，它按照AFTER INSERT ON orders执行。在插入一个新订单到orders表时，MySQL生 成一个新订单号并保存到order_num中。触发器从NEW. order_num取得 这个值并返回它。此触发器必须按照AFTER INSERT执行，因为在BEFORE INSERT语句执行之前，新order_num还没有生成。对于orders的每次插 入使用这个触发器将总是返回新的订单号。
+
+为测试这个触发器，试着插入一下新行，如下所示：
+
+```mysql
+insert into orders(order_date,cust_id)
+VALUES(NOW(),10001);
+select @asd;
+```
+
+### 25.4.2 DELETE触发器
+
+DELETE触发器在DELETE语句执行之前或之后执行。需要知道以下两 点：
+
++ 在DELETE触发器代码内，你可以引用一个名为`OLD`的虚拟表，访 问被删除的行；
++ OLD中的值全都是只读的，不能更新。
+
+```mysql
+CREATE TRIGGER deleteorder BEFORE DELETE on orders
+for each ROW
+BEGIN
+	insert into archive_oerders(order_num, order_date,cust_id)
+	VALUES(OLD.order_num,OLD.order_date,OLD.cust_id);
+END;
+```
+
+分析：在任意订单被删除前将执行此触发器。它使用一条INSERT语句 将 OLD 中的值（要被删除的订单）保存到一个名为 archive_ orders的存档表中（为实际使用这个例子，你需要用与orders相同的列 创建一个名为archive_orders的表）。
+
+### 25.4.3 UPDATE触发器
+
+UPDATE触发器在UPDATE语句执行之前或之后执行。需要知道以下几 点：
+
++ 在UPDATE触发器代码中，你可以引用一个名为OLD的虚拟表访问 以前（UPDATE语句前）的值，引用一个名为NEW的虚拟表访问新 更新的值；
++ 在BEFORE UPDATE触发器中，NEW中的值可能也被更新（允许更改将要用于UPDATE语句中的值）；
++ OLD中的值全都是只读的，不能更新。
+
+下面例子保证州名缩写总是大写
+
+```mysql
+create TRIGGER updatevendor BEFORE UPDATE on vendors
+for EACH ROW SET NEW.vend_state=Upper(NEW.vend_state);
+```
+
+## 25.5 小结
+
+本章介绍了什么是触发器以及为什么要使用触发器，学习了触发器 的类型和何时执行它们，列举了几个用于INSERT、DELETE和UPDATE操作 的触发器例子。
+
+# 第26章 管理事务处理
+
+## 26.1 事务处理
+
+事务处理（transaction processing）可以用来维护数据库的完整性，它 保证成批的MySQL操作要么完全执行，要么完全不执行。
+
+在处理事务和事务处理时，有几个关键词反复出现。
+
++ 事务：（transaction）指一组SQL语句；
++ 回退：（rollback）指撤销指定SQL语句的过程；
++ 提交：（commit）指将未存储的SQL语句结果写入数据库表；
++ 保留点：（ savepoint ）指事务处理中设置的临时占位符（placeholder），你可以对它发布回退（与回退整个事务处理同）。
+
+## 26.2 控制事务处理
+
+管理事务处理的关键在于将SQL语句组分解为逻辑块，并明确规定数 据何时应该回退，何时不应该回退。
+
+MySQL使用下面的语句来标识事务的开始：
+
+```mysql
+START TRANSACTION
+```
+
+### 26.2.1 使用ROLLBACK
+
+MySQL的ROLLBACK命令用来回退（撤销）MySQL语句，请看下面的 语句：
+
+```mysql
+SELECT * FROM ordertotals;
+START TRANSACTION;
+DELETE FROM ordertotals;
+SELECT * FROM ordertotals;
+ROLLBACK;
+SELECT * from orders;
+```
+
+分析：这个例子从显示ordertotals表（此表在第24章中填充）的内 容开始。首先执行一条SELECT以显示该表不为空。然后开始一 个事务处理，用一条DELETE语句删除ordertotals中的所有行。另一条 SELECT语句验证ordertotals确实为空。这时用一条ROLLBACK语句回退 START TRANSACTION之后的所有语句，最后一条SELECT语句显示该表不为 空。
+
+显然， ROLLBACK 只能在一个事务处理内使用（在执行一条 START TRANSACTION命令之后）。
+
+### 26.2.2 使用COMMIT
+
+一般的MySQL语句都是直接针对数据库表执行和编写的。这就是 所谓的隐含提交（implicit commit）， 即提交（写或保存）操作是自动 进行的。
+
+但是，在事务处理块中，提交不会隐含地进行。为进行明确的提交， 使用COMMIT语句，如下所示：
+
+```mysql
+START TRANSACTION;
+DELETE FROM orderitems where order_num=20010;
+delete FROM orders WHERE order_num=20010;
+COMMIT;
+```
+
+分析：在这个例子中，从系统中完全删除订单20010。因为涉及更新 两个数据库表orders和 orderItems，所以使用事务处理块来 保证订单不被部分删除。最后的COMMIT语句仅在不出错时写出更改。如 果第一条DELETE起作用，但第二条失败，则DELETE不会提交（实际上， 它是被自动撤销的）。
+
+### 26.2.3 使用保留点
+
+简单的ROLLBACK和COMMIT语句就可以写入或撤销整个事务处理。但 是，只是对简单的事务处理才能这样做，更复杂的事务处理可能需要部 分提交或回退。
+
+例如，前面描述的添加订单的过程为一个事务处理。如果发生错误， 只需要返回到添加orders行之前即可，不需要回退到customers表（如果 存在的话）。
+
+为了支持回退部分事务处理，必须能在事务处理块中合适的位置放 置占位符。这样，如果需要回退，可以回退到某个占位符。
+
+这些占位符称为保留点。为了创建占位符，可如下使用`SAVEPOINT` 语句：
+
+```mysql
+SAVEPOINT delete1;
+```
+
+每个保留点都取标识它的唯一名字，以便在回退时，MySQL知道要 回退到何处。为了回退到本例给出的保留点，可如下进行：
+
+```mysql
+ROLLBACK TO delete1;
+```
+
+### 26.2.4 更改默认的提交行为
+
+正如所述，默认的MySQL行为是自动提交所有更改。换句话说，任何 时候你执行一条MySQL语句，该语句实际上都是针对表执行的，而且所做 的更改立即生效。为指示MySQL不自动提交更改，需要使用以下语句：
+
+```mysql
+SET autocommit=0;
+```
+
+分析：autocommit标志决定是否自动提交更改，不管有没有COMMIT 语句。设置autocommit为0（假）指示MySQL不自动提交更改 （直到autocommit被设置为真为止）。
+
+## 26.3 小结
+
+本章介绍了事务处理是必须完整执行的SQL语句块。我们学习了如何 使用COMMIT和ROLLBACK语句对何时写数据，何时撤销进行明确的管理。 还学习了如何使用保留点对回退操作提供更强大的控制。
+
