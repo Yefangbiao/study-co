@@ -532,7 +532,9 @@ select * from t1 left join t2 on t1.m1=t2.m2 where t2.n2 is not null;
 
 
 
-## 第15章
+## 第15章-EXPLAIN详解
+
+### 15.1 基础
 
 在日常工作中，我们会有时会开慢查询去记录一些执行时间比较久的SQL语句，找出这些SQL语句并不意味着完事了，些时我们常常用到explain这个命令来查看一个这些SQL语句的执行计划，查看该SQL语句有没有使用上了索引，有没有做全表扫描，这都可以通过explain命令来查看。所以我们深入了解MySQL的基于开销的优化器，还可以获得很多可能被优化器考虑到的访问策略的细节，以及当运行SQL语句时哪种策略预计会被优化器采用。
 
@@ -707,4 +709,69 @@ No tables used：Query语句中使用from dual 或不含任何from子句
 • EXPLAIN不考虑各种Cache
 • EXPLAIN不能显示MySQL在执行查询时所作的优化工作
 • 部分统计信息是估算的，并非精确值
-• EXPALIN只能解释SELECT操作，其他操作要重写为SELECT后查看执行计划。**
+• EXPALIN只能解释SELECT操作，其他操作要重写为SELECT后查看执行计划。
+
+### 15.2 JSON格式的执行计划
+
+我们可以在查询语句中间加上`FORMAT=JSON`。得到一个JSON格式的执行计划
+
+```mysql
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "3.80"
+    },
+    "table": {
+      "table_name": "products",
+      "access_type": "ALL",
+      "rows_examined_per_scan": 14,
+      "rows_produced_per_join": 14,
+      "filtered": "100.00",
+      "cost_info": {
+        "read_cost": "1.00",
+        "eval_cost": "2.80",
+        "prefix_cost": "3.80",
+        "data_read_per_join": "14K"
+      },
+      "used_columns": [
+        "prod_id",
+        "vend_id",
+        "prod_name",
+        "prod_price",
+        "prod_desc"
+      ]
+    }
+  }
+}
+```
+
+## 第16章-optimizer trace
+
+我们可以查看优化器生成执行计划的整个过程。
+
++ 打开`optimizer trace`功能。`SET optimizer_trace="enabled=on;"`
++ 输入自己的查询语句
++ 从`OPTIMIZER_TRACE`表中查看上一个查询的优化过程
+  `SELECT * FROM information_schema.OPTIMIZER_TRACE;`
+
+## 第17章-InnoDB的Buffer POOL
+
+### 17.1 InnoDB的Buffer Pool
+
+默认情况下，Buffer Pool只有128MB
+
+#### 17.1.1 Buffer Pool内部组成
+
+Buffer Pool对应的一片连续的内存被划分为若干个页面，页面大小与InnoDB表空间使用的页面大小一致，默认都是16KB。
+
+每个缓冲页对应的控制信息占用的内存大小是相同的，每个页的控制信息称为一个控制块。控制块与缓存页是一一对应的，都存到Buffer Pool中。控制块存放到前面，缓冲页存在后面。
+
+![image-20210929215814220](MySQK是怎样运行的.assets/image-20210929215814220.png)
+
+## 第18章-事务
+
++ 原子性
++ 一致性
++ 隔离性
++ 持久性
