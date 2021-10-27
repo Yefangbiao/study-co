@@ -1,4 +1,4 @@
-# Kafka学习
+# oKafka学习
 
 ## 01_大纲部分
 
@@ -6,9 +6,9 @@
 
 2.[学习视频](https://www.bilibili.com/video/BV1a4411B7V9?p=1)
 
-3.Kafka深入,看书<<深入理解Kakfa 核心设计与实践原理>> (doing)
+3.Kafka深入,看书<<深入理解Kakfa 核心设计与实践原理>>
 
-4.官方文档
+4.官方文档(doing)
 
 ## 02_Kafka入门
 
@@ -149,9 +149,7 @@ leader副本负责维护ISR。当有follower落后时从ISR移除。如果有OSR
 
 主题作为消息的归类，可以再细分为一个或多个分区，分区 也可以看作对消息的二次归类。 分区的划分不仅为 Kafka 提供了可伸缩性、水平扩展的功能， 还通过多副本机制来为 Kafka 提供数据冗余以提高数据可靠性 。
 
-从 Kafka 的底层实现来说，主题和分区都是逻辑上的概念，分区可以有一至多个副本，每个副本对应一个日志文件 ，每个日志文件对应一至多个日志分段（ LogSegment ），每个日志分
-
-段还可以细分为索引文件、日志存储文件和快照文件等 。
+从 Kafka 的底层实现来说，主题和分区都是逻辑上的概念，分区可以有一至多个副本，每个副本对应一个日志文件 ，每个日志文件对应一至多个日志分段（ LogSegment ），每个日志分段还可以细分为索引文件、日志存储文件和快照文件等 。
 
 ### 1.主题的管理
 
@@ -193,7 +191,7 @@ Kafka 会在 `log.dir` 或 `log.dirs` 参数所配置的目录下创建相应的
 
 示例中的 Topic 和 Partition 分别表示主题名称和分区号 。 Partition 表示主 题中分区的个数 ， ReplicationFactor 表示副本因子 ， 而 Configs 表示创建或修改主题时 指定的参数配置 。 Leader 表示分区的 leader 副本所对应的 brokerld , Isr 表示分区的 ISR 集合， Replicas 表示分区的所有 的副本分配情况 ，即 AR 集合，其中 的数字都表示的是 brokerld.
 
-`kafka-topics.sh`脚 本中还提 供 了 一 个`replica - assignment` 参数来手动 指 定分区副本的分配方案。
+`kafka-topics.sh`脚 本中还提 供 了一个`replica - assignment` 参数来手动指定分区副本的分配方案。
 
 ![image-20210901214105215](Kafka.assets/image-20210901214105215.png)
 
@@ -203,7 +201,7 @@ Kafka 会在 `log.dir` 或 `log.dirs` 参数所配置的目录下创建相应的
 
 注意同一个分区内的副本不能有重复， 比如指定了 0 : 0 , 1 : 1 这种
 
-在创建主题时我们还可以通过 con fig 参数来设置所要创建主题的相关参数 ， 通过这个参 数可以覆盖原本的默认配置。在创建主题时可 以 同时设置多个参数
+在创建主题时我们还可以通过 config 参数来设置所要创建主题的相关参数 ， 通过这个参数可以覆盖原本的默认配置。在创建主题时可以同时设置多个参数
 
 `--config <String : namel=valuel> --config <String:name2=value2>`
 
@@ -335,7 +333,7 @@ func main() {
 
 ![image-20210901222142758](Kafka.assets/image-20210901222142758.png)
 
-`under-replicated-partitions`和`unavailable-partitions`参数都可以找出有 问题的分区。 通过`under-replicated-partitions` 参数可以找出所有包含失效副本的分 区。 包含失效副本的分区可能正在进行同步操作， 也有可能同步发生异常， 此时分区的JSR集 合小于AR集合。
+`under-replicated-partitions`和`unavailable-partitions`参数都可以找出有 问题的分区。 通过`under-replicated-partitions` 参数可以找出所有包含失效副本的分区。 包含失效副本的分区可能正在进行同步操作， 也有可能同步发生异常， 此时分区的ISR集 合小于AR集合。
 
 ![image-20210901222123292](Kafka.assets/image-20210901222123292.png)
 
@@ -345,7 +343,7 @@ func main() {
 
 ### 3.修改主题
 
-个修改的功能就是由`kafka-topics.sh`脚本中的`alter`指令提供的
+修改的功能就是由`kafka-topics.sh`脚本中的`alter`指令提供的
 
 我们首先来看如何增加主题的分区数。 以前面的主题`topic-config`为例， 当前分区数为1, 修改为3
 
@@ -357,7 +355,7 @@ kafka不支持减少分区：
 按照Kafka现有的代码逻辑， 此功能完全可以实现，不过也会使代码的复杂度急剧增大。 实现此功能需要考虑的因素很多， 比如删除的分区中的消息该如何处理？如果随着分区一起消 失则消息的可靠性得不到保障；如果需要保留则又需要考虑如何保留。 直接存储到现有分区的 尾部， 消息的时间戳就不会递增， 如此对于Spark、Flink这类需要消息时间戳（事件时间）的 组件将会受到影响；如果分散插入现有的分区， 那么在消息量很大的时候， 内部的数据复制会 占用很大的资源， 而且在复制期间， 此主题的可用性 又如何得到保障？与此同时， 顺序性问题、 事务性问题， 以及分区和副本的状态机切换问题都是不得不面对的。 反观这个功能的收益点却 是很低的， 如果真的需要实现此类功能， 则完全可以重新创建一个分区数较小的主题， 然后将 现有主题中的消息按照既定的逻辑复制过去即可。
 ```
 
-在创建主题时有 一 个·`if-not-exists`·参数来忽略异常 ， 在 这里也有对应的参数 ， 如 果所要修改的主题不存在 ， 可以通过`if-exists`参数来忽略异常
+在创建主题时有 一 个`if-not-exists`参数来忽略异常，在这里也有对应的参数 ，如果所要修改的主题不存在 ，可以通过`if-exists`参数来忽略异常
 
 ![image-20210901223406060](Kafka.assets/image-20210901223406060.png)
 
@@ -371,7 +369,7 @@ kafka不支持减少分区：
 
 ### 4.配置管理
 
-kaflca-configs.sh 脚本是专门用来对配置进行操作的， 这里的操作是指在运行状态下修改原 有的配置，如此可以达到动态变更的目的。kaflca-configs.sh脚本包含变更配置alter和查看配 一 置describe这两种指令类型。 同使用kaflca-topics.sh脚本变更配置的原则 样， 增、 删、 改 的行为都可以看作变更操作， 不过kaflca-configs.sh脚本不仅可以支持操作主题相关的配置， 还 可以支待操作broker、 用户和客户端这3个类型的配置。
+kaflca-configs.sh 脚本是专门用来对配置进行操作的，这里的操作是指在运行状态下修改原有的配置，如此可以达到动态变更的目的。kaflca-configs.sh脚本包含变更配置alter和查看配 一 置describe这两种指令类型。 同使用kaflca-topics.sh脚本变更配置的原则 样， 增、 删、 改 的行为都可以看作变更操作， 不过kafka-configs.sh脚本不仅可以支持操作主题相关的配置， 还 可以支待操作broker、 用户和客户端这3个类型的配置。
 
 kafka-configs.sh脚本使用entity-type参数来指定操作配置的类型，并且使用entity-name 参数来指定操作配置的名称。 比如查看主题 topic-config的配置可以按如下方式执行：
 
@@ -381,7 +379,7 @@ kafka-configs.sh脚本使用entity-type参数来指定操作配置的类型，�
 
 ![image-20210901223839644](Kafka.assets/image-20210901223839644.png)
 
-使用alter指令变更配置时，需要配合add-config和delete-config这两个参数 起使用。 add-config参数用来实现配置的增、 改， 即覆盖原有的配置； delete-config参 数用来实现配置的删， 即删除被覆盖的配置以恢复默认值。
+使用alter指令变更配置时，需要配合add-config和delete-config这两个参数 起使用。 add-config参数用来实现配置的增、改，即覆盖原有的配置； delete-config参 数用来实现配置的删， 即删除被覆盖的配置以恢复默认值。
 
 ![image-20210901223939141](Kafka.assets/image-20210901223939141.png)
 
@@ -605,9 +603,9 @@ type ClusterAdmin interface {
 
 ### 9. 主题合法性验证
 
-一般情况下， Kafka 生产环境 中的 auto.create.topi cs . enable 参数会被设置为 false ，即自动创建主题这条路会被堵住。 kafka-topics.sh 脚本创建的方式一般由运维人员操作， 普通用户无权过问。那么 KafkaAdminClient 就为普通用户提供了一个“口子”，或者将其集成 到公司内部的资源申请、审核系统中会更加方便 。普通用户 在创建主题的时候，有可能由于误 操作或其他原因而创建了不符合运维规范的主题，比如命名不规范，副本因子数太低等，这些 都会影响后期的系统运维 。 如果创建主题的操作封装在资源申请、 审核系统中，那么在前端就 可以根据规则过滤不符合规范的申请操作 。
+一般情况下， Kafka 生产环境 中的 `auto.create.topics.enable` 参数会被设置为 false ，即自动创建主题这条路会被堵住。 kafka-topics.sh 脚本创建的方式一般由运维人员操作， 普通用户无权过问。那么 KafkaAdminClient 就为普通用户提供了一个“口子”，或者将其集成 到公司内部的资源申请、审核系统中会更加方便 。普通用户 在创建主题的时候，有可能由于误 操作或其他原因而创建了不符合运维规范的主题，比如命名不规范，副本因子数太低等，这些 都会影响后期的系统运维 。 如果创建主题的操作封装在资源申请、 审核系统中，那么在前端就 可以根据规则过滤不符合规范的申请操作 。
 
-Kafka broker 端有－个这样的参数：create.topic . policy.class.name ，默认值为null ，它 提供了一个入口用来验证主题创建的合法性。使用方式很简单，只需要自定义实现 org.apache.kafka.se凹er.policy.CreateTopicPolicy 接口，比如下面示例中的 PolicyDemo 。然后在broker 端的配置文件 config/server.properties 中配置参数 create . topic . policy . class . name 的值为 org.apache.kafka.se凹er.policy.PolicyDemo ， 最后启动服务。
+Kafka broker 端有－个这样的参数：create.topic.policy.class.name ，默认值为null ，它 提供了一个入口用来验证主题创建的合法性。使用方式很简单，只需要自定义实现 org.apache.kafka.se凹er.policy.CreateTopicPolicy 接口，比如下面示例中的 PolicyDemo 。然后在broker 端的配置文件 config/server.properties 中配置参数 create . topic . policy . class . name 的值为 org.apache.kafka.se凹er.policy.PolicyDemo ， 最后启动服务。
 
 存疑？
 
@@ -691,7 +689,7 @@ kafka-reassign-partitions.sh脚本的使用分为3 个步骤:1.创建包括主�
 
 副本间的复制限流有两种实现方式：kafka-config.sh脚本和kafka-reassign-partitions.sh脚本
 
-首先， 我们讲述如何通过kafka-config.sh 脚本来实现限流，kafka-config.sh脚本主要以动态配置的方式来达到限流的目的， 在broker级别有两个与复制限 流相关的配置参数： follower.replication.throttled.rate和leader.replication. throttled.rate, 前者用千设置follower副本复制的速度， 后者用来设置leader副本传输的 速度， 它们的单位都是B/s。 通常情况下， 两者的配置值是相同的。
+首先， 我们讲述如何通过kafka-config.sh 脚本来实现限流，kafka-config.sh脚本主要以动态配置的方式来达到限流的目的， 在broker级别有两个与复制限 流相关的配置参数： follower.replication.throttled.rate和leader.replication.throttled.rate, 前者用千设置follower副本复制的速度， 后者用来设置leader副本传输的 速度， 它们的单位都是B/s。 通常情况下， 两者的配置值是相同的。
 
 ![image-20210902220729488](Kafka.assets/image-20210902220729488.png)
 
@@ -725,7 +723,7 @@ kafka-reassign-partitions.sh脚本的使用分为3 个步骤:1.创建包括主�
 
 ![image-20210902221309129](Kafka.assets/image-20210902221309129.png)
 
-接下来再设置br oker2的复制速度为10B/s, 这样在下面的操作中可以很方便地观察限流与 不限流的不同：
+接下来再设置broker2的复制速度为10B/s, 这样在下面的操作中可以很方便地观察限流与 不限流的不同：
 
 ![image-20210902221322694](Kafka.assets/image-20210902221322694.png)
 
@@ -759,7 +757,7 @@ kafka-reassign-partitions.sh脚本的使用分为3 个步骤:1.创建包括主�
 
 ### 11. 如何选择合适的分区数
 
-在 Kafka 中 ，性能与分区数有着必然的关系，在设定分区数时一般也需要考虑性能的因素。
+在Kafka中，性能与分区数有着必然的关系，在设定分区数时一般也需要考虑性能的因素。
 
 对不同的硬件而言，其对应的性能也会不太一样。在实际生产环境中，我们需要了解一套硬件
 
@@ -775,7 +773,7 @@ l 个分区和 l 个副本的主题 topic-1 中发送 100 万条消息，并且�
 
 ![image-20210902222215303](Kafka.assets/image-20210902222215303.png)
 
-示例中在使用katka-producer-perf-test.sh脚本时用了多 一 个参数， 其中七opic 用来指定生 产者发送消息的目标主题； nurn-records用来指定发送消息的总条数； record-size 用来 设置每条消息的字节数； producer-props 参数用来指定生产者的配置， 可同时指定多组配 置，各组配置之间以空格分隔，与producer-props参数对应的还有 一 个producer.config 参数， 它用来指定生产者的配置文件； throughput 用来进行限流控制， 当设定的值小于0时 不限流， 当设定的值大于0时， 当发送的吞吐量大于该值时就会被阻塞 一段时间。
+示例中在使用katka-producer-perf-test.sh脚本时用了多一个参数， 其中七opic 用来指定生产者发送消息的目标主题； nurn-records用来指定发送消息的总条数； record-size 用来 设置每条消息的字节数； producer-props 参数用来指定生产者的配置， 可同时指定多组配 置，各组配置之间以空格分隔，与producer-props参数对应的还有 一 个producer.config 参数， 它用来指定生产者的配置文件； throughput 用来进行限流控制， 当设定的值小于0时 不限流， 当设定的值大于0时， 当发送的吞吐量大于该值时就会被阻塞 一段时间。
 
 kafka-producer-perf-test.sh脚本中 还有 一 个有意思的参数print-metrics, 指定了这个参 数时会在测试完成之后打印很多指标信息， 对很多测试任务而言具有 一 定的参考价值。 
 
@@ -785,7 +783,7 @@ kafka-producer-perf-test.sh脚本中 还有 一 个有意思的参数print-metri
 
 我们使用 4.4.1节中介绍的性能测试工具来实际测试 一 下。 首先分别创建分区数为1、 20、 50、100、200、500、1000的 主题，对应的主题名称分别 为 topic-I、topic-20、topic-50、topic-100、 topic-200、 topic-500、 topic-I000, 所有主题的副本因子都设置为1 。
 
-消息中间件的性能 一 般是指吞吐量（广义来说还包括延迟）。 抛开硬件资源的影响， 消息 写入的吞吐量还会受到消息大小 、 消息压缩方式、 消息发送方式（同步／异步） 、 消息确认类型
+消息中间件的性能 一 般是指吞吐量（广义来说还包括延迟）。 抛开硬件资源的影响， 消息写入的吞吐量还会受到消息大小、 消息压缩方式、 消息发送方式（同步／异步） 、 消息确认类型
 
 (acks) 、 副本因子等参数的影响， 消息消费的吞吐量还会受到应用逻辑处理速度的影响。 本 案例中暂不考虑这些因素的影响，所有的测试除了主题的分区数不同， 其余的因素都保持相同。
 
@@ -999,7 +997,7 @@ type ConsumerInterceptor interface {
 
 #### 1.9 重要的消费者参数
 
-1. fetch .min.bytes:该参数用来配置 Consumer 在一次拉取请求（调用 poll（）方法）中能从 Kafka 中拉取的最小 数据量，默认值为 1 ( B ）Kafka 在收到 Consumer 的拉取请求时，如果返回给 Consumer 的数 据量小于这个参数所配置的值，那么它就需要进行等待，直到数据量满足这个参数的配置大小。
+1. fetch.min.bytes:该参数用来配置 Consumer 在一次拉取请求（调用 poll()方法）中能从 Kafka 中拉取的最小 数据量，默认值为 1 ( B ）Kafka 在收到 Consumer 的拉取请求时，如果返回给 Consumer 的数 据量小于这个参数所配置的值，那么它就需要进行等待，直到数据量满足这个参数的配置大小。
 2. fetch .max.bytes:该参数与 fetch . max . bytes 参数对应，它用来配置 Consumer 在一次拉取请求中从 Kafka 中拉取的最大数据量，默认值为0，也就是 不限制。
 3. fetch.max.wait.ms
 
