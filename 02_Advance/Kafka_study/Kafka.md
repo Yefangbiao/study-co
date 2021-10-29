@@ -34,7 +34,7 @@ Kafka是一个分布式流式处理平台，它以**高吞吐、可持久化、�
 
 ## 03_Kafka入门_定义
 
-![img](Kafka学习.assets/01.png)
+![img](picture/01.png)
 
 ### 使用消息队列的好处
 1. **解耦**
@@ -62,7 +62,7 @@ Kafka是一个分布式流式处理平台，它以**高吞吐、可持久化、�
 
 消息生产者生产消息发送到Queue中，然后消息消费者从Queue中取出并且消费消息。消息被消费以后， queue 中不再有存储，所以消息消费者不可能消费到已经被消费的消息。Queue 支持存在多个消费者，但是对一个消息而言，只会有一个消费者可以消费。
 
-![img](Kafka学习.assets/02-8514082.png)
+![img](picture/02-8514082.png)
 
 ### 2.发布/订阅模式
 
@@ -78,13 +78,13 @@ Kafka是一个分布式流式处理平台，它以**高吞吐、可持久化、�
 
 kafka使用第二种,可能存在问题，消费者一直询问
 
-![img](Kafka学习.assets/03-8514184.png)
+![img](picture/03-8514184.png)
 
 
 
 ## 05_Kafka基础架构
 
-![img](Kafka学习.assets/04-8514638.png)
+![img](picture/04-8514638.png)
 
 1. **Producer** ： 消息生产者，就是向 Kafka生产数据；
 2. **Consumer** ： 消息消费者，向 Kafka broker 取消息的客户端；
@@ -104,7 +104,7 @@ leader副本负责维护ISR。当有follower落后时从ISR移除。如果有OSR
 + HW:high watermark 高水位。标志了一个offset，消费者只能拉取到这个offset以及之前的消息。
 + LEO:Log End Offset：当前日志文件中下一个待写入的offset.LEO相当于当前日志最后一条offset加一
 
-![image-20210829232829670](Kafka.assets/image-20210829232829670.png)
+![image-20210829232829670](picture/image-20210829232829670.png)
 
 
 
@@ -157,7 +157,7 @@ leader副本负责维护ISR。当有follower落后时从ISR移除。如果有OSR
 
 主题的管理包括创建主题、 查看主题信息、修改主题和删除主题等操作。可以通过 Kafka 提供的 kafka-topics.sh 脚本来执行这些操作,核心代码只有一行
 
-![image-20210901215447899](Kafka.assets/image-20210901215447899.png)
+![image-20210901215447899](picture/image-20210901215447899.png)
 
 可以看到其实质上是调用了 kafka.admin.TopicCommand 类来执行主题管理的操作 。
 
@@ -179,7 +179,7 @@ Kafka 会在 `log.dir` 或 `log.dirs` 参数所配置的目录下创建相应的
 
 主题、分区、副本和 Log （日志）的关系如图 4-1 所示， 主题和分区都是提供给上层用户 的抽象， 而在副本层面或更加确切地说是 Log 层面才有实际物理上的存在。 同一个分区中的多 个副本必须分布在不同的 broker 中，这样才能提供有效的数据冗余。
 
-![image-20210901213210962](Kafka.assets/image-20210901213210962.png)
+![image-20210901213210962](picture/image-20210901213210962.png)
 
 在 kafka-topics.sh 脚本中 对应的还有 `list` 、` describe` 、 `alter` 和 `delete` 这 4 个同级别的指令类型 ， 每个类型所需 要的参数也不尽相同。
 
@@ -187,17 +187,17 @@ Kafka 会在 `log.dir` 或 `log.dirs` 参数所配置的目录下创建相应的
 
 `kafka-topics --topic topic-demo --describe --zookeeper localhost:2181`
 
-![image-20210901213650176](Kafka.assets/image-20210901213650176.png)
+![image-20210901213650176](picture/image-20210901213650176.png)
 
 示例中的 Topic 和 Partition 分别表示主题名称和分区号 。 Partition 表示主 题中分区的个数 ， ReplicationFactor 表示副本因子 ， 而 Configs 表示创建或修改主题时 指定的参数配置 。 Leader 表示分区的 leader 副本所对应的 brokerld , Isr 表示分区的 ISR 集合， Replicas 表示分区的所有 的副本分配情况 ，即 AR 集合，其中 的数字都表示的是 brokerld.
 
 `kafka-topics.sh`脚 本中还提 供 了一个`replica - assignment` 参数来手动指定分区副本的分配方案。
 
-![image-20210901214105215](Kafka.assets/image-20210901214105215.png)
+![image-20210901214105215](picture/image-20210901214105215.png)
 
 这种方式根据分区号的数值大小按照从小到大的顺序进行排 列 ， 分区与分区之间用 逗号 “，” 隔开， 分区内多个副本用冒号“：”隔开。并且在使用 replica-assignment 参数创建主题时 不需要原本必备 的 partitions 和 replication - factor 这两个参数。
 
-![image-20210901214227171](Kafka.assets/image-20210901214227171.png)
+![image-20210901214227171](picture/image-20210901214227171.png)
 
 注意同一个分区内的副本不能有重复， 比如指定了 0 : 0 , 1 : 1 这种
 
@@ -205,15 +205,15 @@ Kafka 会在 `log.dir` 或 `log.dirs` 参数所配置的目录下创建相应的
 
 `--config <String : namel=valuel> --config <String:name2=value2>`
 
-![image-20210901214400258](Kafka.assets/image-20210901214400258.png)
+![image-20210901214400258](picture/image-20210901214400258.png)
 
 我们再次通过 descr ibe 指令来查看所创建的主题信息：
 
-![image-20210901214452635](Kafka.assets/image-20210901214452635.png)
+![image-20210901214452635](picture/image-20210901214452635.png)
 
 在 kafka-topics.sh 脚本中还提供了一个 if-not-exists 参数 ， 如果在创建主题时带上了这个参 数，那么在发生命名冲突时将不做任何处理（既不创建主题，也不报错）
 
-![image-20210901214603820](Kafka.assets/image-20210901214603820.png)
+![image-20210901214603820](picture/image-20210901214603820.png)
 
 kafka-topics.sh 脚本在创建主题时还会检测是否包含“．”或“－”字符。 为什么要检测这两 个字符呢？ 因 为在 Kafka 的 内部做埋点时会根据主题的名称来命名 metrics 的名称， 并且会将点 号“．”改成下画线 “_’。 假设遇到一个名称为“ topic.1_2 ＇’的主题， 还有一个名称为“ topic_1 .2 ” 的主题， 那么最后的 metrics 的名称都会为“ topic_ 1_2 ”，这样就发生了名称冲突。 举例如下， 首先创建一个以“ topic.1_2 ”为名称的主题， 提示 WARNING 警告 ， 之后再创建“topic. 1_2 ” 时发生 InvalidTopicException 异常。
 
@@ -225,7 +225,7 @@ Kafka 从 0.10.x 版本开始支持指定 broker 的机架信息（机架的名�
 
 此时若要成功创建主题 ， 要么将集群中的所有 broker 都加上机架信息或都去掉机架信息 ， 要么使用 `disable-rack- aware` 参数来忽略机架信息 
 
-![image-20210901214908387](Kafka.assets/image-20210901214908387.png)
+![image-20210901214908387](picture/image-20210901214908387.png)
 
 如果集群中 的所有 broker 都有机架信息，那么也可以使用 `disable - rack- aware` 参数来 忽略机架信息对分区副本的分配影响
 
@@ -291,7 +291,7 @@ func main() {
 
 2. --topic还支待指定多个主题，可以和`--describe`结合使用
 
-![image-20210901221747072](Kafka.assets/image-20210901221747072.png)
+![image-20210901221747072](picture/image-20210901221747072.png)
 
 **查看topic详细信息**
 
@@ -331,15 +331,15 @@ func main() {
 
 增加`topics-with-overrides`参数可以找出所有包含覆盖配置的主题， 它只会列出包含了与集群不一样配置的主题。
 
-![image-20210901222142758](Kafka.assets/image-20210901222142758.png)
+![image-20210901222142758](picture/image-20210901222142758.png)
 
 `under-replicated-partitions`和`unavailable-partitions`参数都可以找出有 问题的分区。 通过`under-replicated-partitions` 参数可以找出所有包含失效副本的分区。 包含失效副本的分区可能正在进行同步操作， 也有可能同步发生异常， 此时分区的ISR集 合小于AR集合。
 
-![image-20210901222123292](Kafka.assets/image-20210901222123292.png)
+![image-20210901222123292](picture/image-20210901222123292.png)
 
 通过`unavailable-partitions`参数可以查看主题中没有leader副本的分区
 
-![image-20210901222111233](Kafka.assets/image-20210901222111233.png)
+![image-20210901222111233](picture/image-20210901222111233.png)
 
 ### 3.修改主题
 
@@ -347,7 +347,7 @@ func main() {
 
 我们首先来看如何增加主题的分区数。 以前面的主题`topic-config`为例， 当前分区数为1, 修改为3
 
-![image-20210901223152925](Kafka.assets/image-20210901223152925.png)
+![image-20210901223152925](picture/image-20210901223152925.png)
 
 kafka不支持减少分区：
 
@@ -357,15 +357,15 @@ kafka不支持减少分区：
 
 在创建主题时有 一 个`if-not-exists`参数来忽略异常，在这里也有对应的参数 ，如果所要修改的主题不存在 ，可以通过`if-exists`参数来忽略异常
 
-![image-20210901223406060](Kafka.assets/image-20210901223406060.png)
+![image-20210901223406060](picture/image-20210901223406060.png)
 
 除了修改分区数 ， 我们还可以使用kafka-topics.sh脚本的`alter`指令来变更主题的配置。 在创建主题的时候我们可以通过config参数来设置所要创建主题的相关参数 ， 通过这个参数 可以覆盖原本的默认配置
 
-![image-20210901223500685](Kafka.assets/image-20210901223500685.png)
+![image-20210901223500685](picture/image-20210901223500685.png)
 
 我们可以通过`delete-config`参数来删除之前覆盖的配置
 
-![image-20210901223525922](Kafka.assets/image-20210901223525922.png)
+![image-20210901223525922](picture/image-20210901223525922.png)
 
 ### 4.配置管理
 
@@ -373,19 +373,19 @@ kaflca-configs.sh 脚本是专门用来对配置进行操作的，这里的操�
 
 kafka-configs.sh脚本使用entity-type参数来指定操作配置的类型，并且使用entity-name 参数来指定操作配置的名称。 比如查看主题 topic-config的配置可以按如下方式执行：
 
-![image-20210901223747967](Kafka.assets/image-20210901223747967.png)
+![image-20210901223747967](picture/image-20210901223747967.png)
 
 --describe指定了查看配置的指令动作，--entity-type指定了查看配置的实体类型， 一entity - name指定了查看配置的实体名称。 entity-type只可以配置4个值： topics、 brokers 、clients和users
 
-![image-20210901223839644](Kafka.assets/image-20210901223839644.png)
+![image-20210901223839644](picture/image-20210901223839644.png)
 
 使用alter指令变更配置时，需要配合add-config和delete-config这两个参数 起使用。 add-config参数用来实现配置的增、改，即覆盖原有的配置； delete-config参 数用来实现配置的删， 即删除被覆盖的配置以恢复默认值。
 
-![image-20210901223939141](Kafka.assets/image-20210901223939141.png)
+![image-20210901223939141](picture/image-20210901223939141.png)
 
 使用delete-con丘g参数删除配置时， 同add-config参数 一 样支持多个配置的操作，多个配置之间用逗号
 
-![image-20210901224019308](Kafka.assets/image-20210901224019308.png)
+![image-20210901224019308](picture/image-20210901224019308.png)
 
 **改变配置**
 
@@ -617,7 +617,7 @@ Kafka broker 端有－个这样的参数：create.topic.policy.class.name ，默
 
 随着时间的更替， Kafka集群的broker节点不可避免地会遇到宅机或崩溃的问题， 当 分区 的leader节点发生故障时， 其中 一 个follower节点就会成为新的leader节点， 这样就会导致集 群的负载不均衡， 从而影响整体的健壮性和稳定性。 当原来的leader节点恢复之后重新加入集 群时， 它只能成为 一个新的follower节点而不再对外提供服务。
 
-![image-20210902214528696](Kafka.assets/image-20210902214528696.png)
+![image-20210902214528696](picture/image-20210902214528696.png)
 
 为了能够有效地治理负载失衡的情况，Kafka引入了优先副本(preferred replica) 的 概念 。 所谓的优先副本 是指在 AR 集合列表中的第 一 个副本 。 比如上面 主题 topic-partitions中 分区 0 的AR集合列表 (Replicas)为[1,2 0 , ], 那么分区0 的优先副本即为1。 理想情况下， 优先副 本就是该分区的leader副本， 所以也可以称之为 preferred leader。 Kafka要确保所 有主题的优先 副本在Kafka集群中均匀分布， 这样就保证了所有分区的le ader均衡 分布。 如果leader 分布过 于集中， 就会造成集群 负载不均衡。
 
@@ -629,17 +629,17 @@ Kafka broker 端有－个这样的参数：create.topic.policy.class.name ，默
 
 Kafka中kafka-perferred-replica-election.sh脚本提供了对分区leader副本进行重新平衡的功 一 能。优先副本的选举过程是 个安全的过程，Kafka客户端 可以自动感知分区leader副本的变 更。 下面的示例演示了kafka-perferred-replica-election.sh脚本的具体用法：
 
-![image-20210902214727948](Kafka.assets/image-20210902214727948.png)
+![image-20210902214727948](picture/image-20210902214727948.png)
 
 kafka-perferred-replica-election.sh脚本中还提供了path-to-json-file参数来小批量地 对部分分区执行优先副本的选举操作。通过path-to-json-file参数来指定 一 个 JSON 文件， 这个 JSON 文件里保存需要执行优先副本选举的分区清单。
 
 举个例子， 我们再将集群中brokerld为2的节点重启， 不过我们现在只想对主题 topicpart山ons执行优先副本的选举操作， 那么先创建一 个 JSON 文件， 文件名假定为election.json, 文件的内容如下：
 
-![image-20210902215144258](Kafka.assets/image-20210902215144258.png)
+![image-20210902215144258](picture/image-20210902215144258.png)
 
 然后通过kafka-perferred-replica-election.sh脚本配合path-to-json-file参数来对主题 topic-partitions执行优先副本的选举操作， 具体示例如下
 
-![image-20210902215227722](Kafka.assets/image-20210902215227722.png)
+![image-20210902215227722](picture/image-20210902215227722.png)
 
 #### 10.1 分区重分配
 
@@ -655,15 +655,15 @@ kafka-reassign-partitions.sh脚本的使用分为3 个步骤:1.创建包括主�
 
 下面我们通过 一 个具体的案例来演示kafka-reassign-part山ons.sh脚本的用法。首先在 一 个由 3个节点 (broker 0、broker 1、broker2)组成的集群中创建 一 个主题topic-reassign, 主题中包 含4个分区和2个副本：
 
-![image-20210902215612988](Kafka.assets/image-20210902215612988.png)
+![image-20210902215612988](picture/image-20210902215612988.png)
 
 我们可以观察到主题topic-reassi gn 在3个节点中都有相应的分区副本分布。由于某种原因， 我们想要下线brokerld为1的broker 节点 ， 在此之前， 我们要做的就是将其上的分区副本迁移 一 出去。首先创建一份json文件，文件内容为要进行分区重分配的主题清单
 
-![image-20210902215641376](Kafka.assets/image-20210902215641376.png)
+![image-20210902215641376](picture/image-20210902215641376.png)
 
 第二步就是根据这个JSON文件和指定所要分配的broker节点列表来生成 配方案， 具体内容参考如下：
 
-![image-20210902215718864](Kafka.assets/image-20210902215718864.png)
+![image-20210902215718864](picture/image-20210902215718864.png)
 
 上面的示例中包含4个参数， 其中zookeeper已经很常见了， 用来指定ZooKeeper的地 址。generate是 kafka-reassign -parti tions.sh脚本中指令类型的参数，可以类比于kafk:a-topics.sh 脚本中的create、 巨st等， 它用来生成 一 个重分配的候选方案 。 topic-to-move-json 用来指定分区重分配对应的主题清单文件的路径， 该清单文件的具体的格式 可以归纳为 { " topics " : [{ " topic": " foo"},{ " topic " : " fool"}],"version": 1 }。 broker-list用来指定 所要分配的 broker节点列表， 比如示例中的"0,2"。
 
@@ -673,7 +673,7 @@ kafka-reassign-partitions.sh脚本的使用分为3 个步骤:1.创建包括主�
 
 第三步执行具体的重分配动作
 
-![image-20210902215856428](Kafka.assets/image-20210902215856428.png)
+![image-20210902215856428](picture/image-20210902215856428.png)
 
 可以看到主题中的所有分区副本都只在0和2的broker节点上分布了。
 
@@ -691,57 +691,57 @@ kafka-reassign-partitions.sh脚本的使用分为3 个步骤:1.创建包括主�
 
 首先， 我们讲述如何通过kafka-config.sh 脚本来实现限流，kafka-config.sh脚本主要以动态配置的方式来达到限流的目的， 在broker级别有两个与复制限 流相关的配置参数： follower.replication.throttled.rate和leader.replication.throttled.rate, 前者用千设置follower副本复制的速度， 后者用来设置leader副本传输的 速度， 它们的单位都是B/s。 通常情况下， 两者的配置值是相同的。
 
-![image-20210902220729488](Kafka.assets/image-20210902220729488.png)
+![image-20210902220729488](picture/image-20210902220729488.png)
 
 删除刚刚添加的配置也很简单
 
-![image-20210902220804303](Kafka.assets/image-20210902220804303.png)
+![image-20210902220804303](picture/image-20210902220804303.png)
 
 在主题 级别也有两个相关的参数来限制复制的速度：leader.replication.throttled.replicas和follower.replication.throttled.replicas,
 
 它们分别用来配置被限 制速度的主题所对应的leader副本列表和follower副本列表
 
-![image-20210902220902497](Kafka.assets/image-20210902220902497.png)
+![image-20210902220902497](picture/image-20210902220902497.png)
 
 在上面示例中， 主题topic-throttle的三个分区所对应的leader节点分别为0、1、2, 即分区 与代理的映射关系为0:0、1: 1、2:2, 而对应的follower节点分别为1、2、0, 相关的分区与代 理的映射关系为0:1、1:2、 2:0, 那么此主题的限流副本列表及具体的操作细节如下：
 
-![image-20210902220951703](Kafka.assets/image-20210902220951703.png)
+![image-20210902220951703](picture/image-20210902220951703.png)
 
 在了解了与限流相关的4个配置参数之后， 我们演示一下带有限流的分区重分配的用法
 
 首先按照4.3.2节的步骤创建 一个包含可行性方案的 pro ject.json文件，
 
-![image-20210902221109559](Kafka.assets/image-20210902221109559.png)
+![image-20210902221109559](picture/image-20210902221109559.png)
 
 接下来设置被限流的副本列表， 这里就很有讲究了，首先看 一 下重分配前和分配后的分区,副本布局对比， 详细如下：
 
-![image-20210902221036261](Kafka.assets/image-20210902221036261.png)
+![image-20210902221036261](picture/image-20210902221036261.png)
 
 如果分区重分配会引起某个分区AR集合的变更， 那么这个分区中与leader有关的限制会 应用千重分配前的所有副本，因为任何 一 个副本都可能是leader, 而与follower有关的限制会应 用于所有移动的目的地。 从概念上理解会比较抽象， 这里不妨举个例子， 对上面的布局对比而 言， 分区0重分配的AR为[0,1], 重分配后的AR为[0,2], 那么这里的目的地就是新增的2。 也 就是说， 对分区0而言， leader.replication.throttled.replicas配置为[0:0,0:1], follower.replication.throttled.replicas 配置为[0:2]。 同理， 对于分区1 而言， leader.replication.throttled.replicas配置为[1:1,1:2],follower. replication. throttled.replicas配置为[1:O]。 分区3的AR集合没有发生任何变化， 这里可以忽略。
 
 获取限流副本列表之后， 我们就可以执行具体的操作了
 
-![image-20210902221309129](Kafka.assets/image-20210902221309129.png)
+![image-20210902221309129](picture/image-20210902221309129.png)
 
 接下来再设置broker2的复制速度为10B/s, 这样在下面的操作中可以很方便地观察限流与 不限流的不同：
 
-![image-20210902221322694](Kafka.assets/image-20210902221322694.png)
+![image-20210902221322694](picture/image-20210902221322694.png)
 
 在执行具体的重分配操作之前， 我们需要开启 一 个生产者并向主题topic-throttle中发送一  批消息， 这样可以方便地观察正在进行数据复制的过程
 
 之后我们再执行正常的分区重分配的操作， 示例如下
 
-![image-20210902221349807](Kafka.assets/image-20210902221349807.png)
+![image-20210902221349807](picture/image-20210902221349807.png)
 
 执行之后， 可以查看执行的进度，示例如下：
 
-![image-20210902221426964](Kafka.assets/image-20210902221426964.png)
+![image-20210902221426964](picture/image-20210902221426964.png)
 
 可以看到分区topic-throttle-0还在同步过程中，因 为 我们之前设置了broker 2的复制速度为 10B/s, 这样使同步变得缓慢， 分区topic-throttle-0需要同步数据到位于broker 2的新增副本中。 随着时间的推移， 分区topic-throttle-0最终会变成"completed successful"的状态。
 
 为了不影响Kafka本身的性能， 往往对临时设置的 一 些限制性的配置在使用完后要及时删 除， 而kafka-reassign-partitions.sh脚本配合指令参数verify就可以实现这个功能，在所有的 分区都重分配完成之后执行查看进度的命令时会有如下的信息：
 
-![image-20210902221503957](Kafka.assets/image-20210902221503957.png)
+![image-20210902221503957](picture/image-20210902221503957.png)
 
 #### 10.3 修改副本因子
 
@@ -749,11 +749,11 @@ kafka-reassign-partitions.sh脚本的使用分为3 个步骤:1.创建包括主�
 
 我们可以自行添加一个副本，可以改成下面的内容
 
-![image-20210902221611333](Kafka.assets/image-20210902221611333.png)
+![image-20210902221611333](picture/image-20210902221611333.png)
 
 注意增加副本因子时也要在log_dirs中添加一个"any" , 这个log_dirs代表Kafka中的日志目录， 对应于broker端的log.dir或log.dirs参数的配置值， 如果不 需 要关注此方面的细节， 那么可以简单地设置为"any"。
 
-![image-20210902221651314](Kafka.assets/image-20210902221651314.png)
+![image-20210902221651314](picture/image-20210902221651314.png)
 
 ### 11. 如何选择合适的分区数
 
@@ -771,7 +771,7 @@ l 个分区和 l 个副本的主题 topic-1 中发送 100 万条消息，并且�
 
 对应的 acks 参数为 1. 详细内容参考如下 ：
 
-![image-20210902222215303](Kafka.assets/image-20210902222215303.png)
+![image-20210902222215303](picture/image-20210902222215303.png)
 
 示例中在使用katka-producer-perf-test.sh脚本时用了多一个参数， 其中七opic 用来指定生产者发送消息的目标主题； nurn-records用来指定发送消息的总条数； record-size 用来 设置每条消息的字节数； producer-props 参数用来指定生产者的配置， 可同时指定多组配 置，各组配置之间以空格分隔，与producer-props参数对应的还有 一 个producer.config 参数， 它用来指定生产者的配置文件； throughput 用来进行限流控制， 当设定的值小于0时 不限流， 当设定的值大于0时， 当发送的吞吐量大于该值时就会被阻塞 一段时间。
 
@@ -789,17 +789,17 @@ kafka-producer-perf-test.sh脚本中 还有 一 个有意思的参数print-metri
 
 使用 kafka - producer-perf-test.sh脚本分别向这些主题中发送100万条消息体大小为 1KB的 消息， 对应的测试命令如下：
 
-![image-20210902222436521](Kafka.assets/image-20210902222436521.png)
+![image-20210902222436521](picture/image-20210902222436521.png)
 
 对应的生产者性能测试结果如图4-2所示。 不同的硬件环境， 甚至不同批次 的测试得到的 测试结果也不会完全相同， 但总体趋势还是会保持和图4-2中的 一 样。
 
-![image-20210902222449487](Kafka.assets/image-20210902222449487.png)
+![image-20210902222449487](picture/image-20210902222449487.png)
 
 上面针对的是消息生产者的测试， 对消息消费者而言同样有 吞吐量方面的考量。 使用 kafka-consumer-perf-test.sh脚本分别消费这些主题中的100万条消息， 对应的测试命令如下：
 
-![image-20210902222508770](Kafka.assets/image-20210902222508770.png)
+![image-20210902222508770](picture/image-20210902222508770.png)
 
-![image-20210902222522307](Kafka.assets/image-20210902222522307.png)
+![image-20210902222522307](picture/image-20210902222522307.png)
 
 
 
@@ -815,7 +815,7 @@ kafka-producer-perf-test.sh脚本中 还有 一 个有意思的参数print-metri
 
 消费者(Consumer)负责订阅Kaflca 中的主题(Topic), 并且从订阅的主题上拉取消息。 一 与其他 一 些消息中间件不同的是： 在Kaflca 的消费理念中还有 层消费组(Consumer Group) 一 的概念， 每个消费者都有 个对应的消费组。
 
-![image-20210831211018400](Kafka.assets/image-20210831211018400.png)
+![image-20210831211018400](picture/image-20210831211018400.png)
 
 如图3-1所示， 某个主题中共有4个分区(Partition): P0 、 P1、 P2 、 P3。 有两个消费组A 和B都订阅了这个主题， 消费组A中有4个消费者(C0、 C1、 C2 和C3), 消费组B中有2 个消费者(C4和CS)。 按照Kafka默认的规则， 最后的分配结果是消费组A中的每 一 个消费 者分配到1个分区， 消费组B中的每 一 个消费者分配到 2 个分区， 两个消费组之间互不影响。 每个消费者只能消费所分配到的分区中的消息。 换言之， 每 一 个分区只能被 一 个消费组中的一  个消费者所消费。
 
@@ -938,7 +938,7 @@ Kafka中的消费是基于 拉模式的。消息的消费 一 般有两种模式
 
 参考图 3-6 的消费位移 ， x 表示某一次拉取操作 中此分 区消息 的最大偏移量 ，假设当前消费 者已经消费了 x 位 置 的消息，那么我们就可以说消费者的消 费位移 为 X ，图中也用了 lastConsumedOffset 这个单词来标识它 。
 
-![image-20210831215953688](Kafka.assets/image-20210831215953688.png)
+![image-20210831215953688](picture/image-20210831215953688.png)
 
 不过需要非常明确的是 ， 当前消费者需要提交的消 费位移并不是 x，而是 x+ 1,在消费者中还有一个 `committed offset` 的概念，它表示已经提交过的消费位移。
 
@@ -1162,7 +1162,7 @@ func (oi *OTelInterceptor) GetNum() int {
 
 生产者客户端的架构
 
-![image-20210830222315256](Kafka.assets/image-20210830222315256.png)
+![image-20210830222315256](picture/image-20210830222315256.png)
 
 整个生产者客户端由两个线程协调运行，这两个线程分别为`主线程`和 `Sender 线程` （发送线程）。 在主线程中由 KafkaProducer 创建消息， 然后通过可能的拦截器、序列化器和分区器的作 用之后缓存到`消息累加器`（ RecordAccumulator， 也称为消息收集器〉中。 Sender 线程负责从 RecordAccumulator 中 获取消息并将其发送到 Kafka 中 。
 
@@ -1186,7 +1186,7 @@ Sender 从 RecordAccumulator 中 获取缓存的消息之后，会进一 步将�
 
 InFlightRequests 还可以获得 leastLoadedNode ，即所有 Node 中负载最小的 那一个 。这里的负载最小是通过每个 Node 在 InFlightRequests 中还未确认的请求决定的，未确认的请求越多则认为负载越大。 对于图 2-2 中的 InFlightRequests 来说，图中展示了 三个节点Node0、Node1 和 Node2 ，很明显 Nodel 的负载最小 。 也就是说， Node1 为当前的 leastLoadedNode。 选择 leastLoadedNode 发送请求可以使它能够尽快发出(发送元数据更新相关的请求)，避免因网络拥塞等异常而影响整体的进 度。 leastLoadedNode 的概念可以用于多个应用场合，比如元数据请求、消费者组播协议的交互。
 
-![image-20210830223527641](Kafka.assets/image-20210830223527641.png)
+![image-20210830223527641](picture/image-20210830223527641.png)
 
 
 
@@ -1291,17 +1291,17 @@ Kafka 中的消息是以主题为基本单位进行归类的， 各个主题在�
 
 如果分区规则设置得合理， 那么所有的消息可以均匀地分布到不同的分区中， 这样就可以 实现水平扩展。 不考虑多副本的情况， 一个分区对应 一 个日志(Log)。 为了防止Log过大， Ka住a又引入了日志分段(LogSegment)的概念， 将Log切分为多个LogSegment, 相当于 一 个 巨型文件被平均分配为多个相对较小的文件， 这样也便于消息的维护和清理。 事实上， Log 和 LogSegnient也不是纯粹物理意义上的概念， Log在物理上只以文件夹的形式存储， 而每个 LogSegment对应于磁盘上的 一个日志文件 和两个索引文件
 
-![image-20210902224157956](Kafka.assets/image-20210902224157956.png)
+![image-20210902224157956](picture/image-20210902224157956.png)
 
 在4.1.1节中我们知道Log对应了 一 个命名形式为<topic > <partition>的文件夹。 举个例子， 假设有 一 个名为"topic-log" 的主题 ， 此主题中具有4 个分区， 那么在实际物理存储上表现为 "topic-log-0" "topic-log-1" "topic-log-2" "topic-log-3"这4个文件夹：
 
-![image-20210902224315199](Kafka.assets/image-20210902224315199.png)
+![image-20210902224315199](picture/image-20210902224315199.png)
 
 向Log中追加 消息时是顺序写入的， 只有最后 一 个LogSegment才能执行写入操作， 在此 之 前所有的LogSegment都 不能写入数据。 为了方便描述， 我们将最后 一 个LogSegment称为 "activeSegment" , 即表示当前活跃的日志分段。 随着消息的不断写入 ， 当activeSegment满足 一定的条件时 ， 就需要创建新的activeSegment, 之后追加的消息将写入新的activeSegment。
 
 为了便于消息的检索， 每个LogSegment中的日志文件 （以 " .log"为文件后缀）都有对应 的两个索引文件：偏移量 索引文件（以".index"为文件后缀）和时间戳索引文件（以" .timeindex" 为文件后缀） 。 每个LogSegment都有 一 个基准偏移量baseOffset, 用来表示当前LogSegment 中第 一 条消息的offset。 偏移量是 一 个64位的长整型数， 日志文件和两个索引文件都是根据 基 准偏移量(baseOffset)命名 的， 名称固定为20 位数字， 没有达到的位数则用 0 填充。 比如第 一个LogSegment的基准偏移量为0, 对应的日志文件为00000000000000000000.log。
 
-![image-20210902224410810](Kafka.assets/image-20210902224410810.png)
+![image-20210902224410810](picture/image-20210902224410810.png)
 
 示例中第2个LogSegment对应的基准位移是133, 也说明了该LogSegment中的第 一 条消息的偏移量为133,
 
@@ -1309,13 +1309,13 @@ Kafka 中的消息是以主题为基本单位进行归类的， 各个主题在�
 
 从更加宏观的视角上看， Katka 中的文件不只上面提及的这些文件， 比如还有 一 些检查点 文件， 当 一个Katka服务第 一次启动的时候， 默认的根目录下就会创建以下 5个文件
 
-![image-20210902224545116](Kafka.assets/image-20210902224545116.png)
+![image-20210902224545116](picture/image-20210902224545116.png)
 
 消费者提交的位移是保存在 Kafka内部_consume__offset 中的， 初始情况下这个主题并不存在， 当第 一次有消费者消费消息时会自动创建这个主题
 
 在某一 时刻， Kafka中的文件目录布局如图5 -2所示。 每 一 个根目录都会包含最基本的4 个检查点文件(xxx-checkpoint)和meta.properties文件。在创建主题的时候， 如果当前broker 中不止配置了 一 个根目录， 那么会挑选分区数最少的那个根目录来完成本次创建任务。
 
-![image-20210902224707447](Kafka.assets/image-20210902224707447.png)
+![image-20210902224707447](picture/image-20210902224707447.png)
 
 ### 2. 日志格式的演变
 
@@ -1329,7 +1329,7 @@ Kafka消息格式的第一个版本通常称为v0版本， 在Kafka0.10.0之前�
 
 图5-3中左边的"RECORD"部分就是v0版本的消息格式， 大多数人会把图5-3中左边的 整体(即包括offset和message size字段)都看作消息， 因为每个RECORD(v0和v1 版)必定对应一个offset和message size。 每条消息都有一个offset用来标志它在分 区中的偏移量，这个offset是逻辑值，而非实际物理偏移值， messagesize表示消息的大小， 这两者在一起被称为日志头部(LOG_OVERHEAD), 固定为12B。 LOG_OVERHEAD和RECORD一 起用来描述一条消息
 
-![image-20210903141342581](Kafka.assets/image-20210903141342581.png)
+![image-20210903141342581](picture/image-20210903141342581.png)
 
 下面具体陈述一下消息格式中的各个字段
 
@@ -1349,7 +1349,7 @@ Kafka从0.10.0版本开始到0.11.0版本之前所使用的消息格式版本为
 
 一个timestamp字段， 表示消息的时间戳
 
-![image-20210904081228765](Kafka.assets/image-20210904081228765.png)
+![image-20210904081228765](picture/image-20210904081228765.png)
 
 vl版本的magic字段的值为1。 vl版本的attributes字段中的 低3位和v0版本的 样， 还是表示压缩类型而 第4个位(bit)也被利 用了起来：0表示timestamp类型为CreateTime, 而1表示timestamp类型 为LogAppendTime, 其他位保留。 timestamp类型由broker 端参 数log.message.timestamp.type来配置， 默认值为CreateTime, 即采用生产者创建消息时的时间戳
 
@@ -1367,13 +1367,13 @@ Kafka日志中使用哪种压缩方式是通过参数compression.type来配置�
 
 压缩后的 外层消息(wrapper message)中的key为null, 所以图5-5左半部分没有画出key 字段，value字段中保存的是多条压缩消息 (inner message , 内层消息）， 其中 Record表示的 是从crc32到value的消息格式。 当生产者创建压缩消息的时候， 对内部压缩消息设置的 offset从0开始为每个 内部消息分配offset
 
-![image-20210904081922714](Kafka.assets/image-20210904081922714.png)
+![image-20210904081922714](picture/image-20210904081922714.png)
 
 其实每个从生产者发出的消息集中的消息offset都是从0开始的，当然这个offset不能直接 存储在日志文件中， 对offset 的转换是在服务端进行的， 客户端不需要做这个工作。 外层消息 保存了内层消息中最后 一 条消息的绝对位移(absolute offset) , 绝对位移是相对于整个分区而 言的。
 
 参考图5-6, 对于未压缩的情形， 图右内层消息中最后 一 条的offset理应是1030, 但被压 缩之后就变成了5, 而这个1030被赋予给了外层的offset 。 当消费者消费这个消息集的时候， 首先解压缩整个消息集， 然后找到内层消息中最后 一 条消息的inner offset, 根据如下公式找到 内层消息中最后 一 条消息前面的消息的absolute offset (RO表示Relative Offset, IO表示I n ner Offset, 而AO表示Absolute Offset) :
 
-![image-20210904082253317](Kafka.assets/image-20210904082253317.png)
+![image-20210904082253317](picture/image-20210904082253317.png)
 
 RO = IO of a message - IO of the last message 
 
@@ -1409,7 +1409,7 @@ Kafka从0.11 .0版本开始所使用的消息格式版本为v2, 这个版本的�
 
 v2 版本中消息集称为 Record Batch，而不是先前的 Message Set,其内部也包含了一条或多条消息，消息的格式参见图 5-7 的中部和右部。在消息压缩的情形下， Record Batch Header 部 分（参见图 5-7 左部， 从 first offset 到records coun t 字段）是不被压缩的，而被压缩的是 records 字段中的所有内容。。 生产者客户端中的 ProducerBatch 对应这里的RecordBatch,而 ProducerRecord对应这里的 Record.
 
-![image-20210904083619442](Kafka.assets/image-20210904083619442.png)
+![image-20210904083619442](picture/image-20210904083619442.png)
 
 先讲述消息格式 Record 的关键字段， 可以看到内部宇 段大量采用了 Varints ， 这样 Kafka 可 以根据具体的值 来确定需要几个 字节来保存。 v2 版本的消息格式 去掉了 ere 字段， 另外增加了 length （消息总长度〉、 timestamp delta （时间戳增量）、 offset delta （位移增量）和 headers 信息，并且 attributes 字段被弃用了
 
@@ -1436,13 +1436,13 @@ v2 版本对消息集（ RecordBatch ）做了彻底的修改， 参考图 5-7 �
 + first sequence ：和 producer id producer epoeh 一样,支持幂等性和事务
 + records count : RecordBatch 中 Record 的个数。
 
-![image-20210904084516274](Kafka.assets/image-20210904084516274.png)
+![image-20210904084516274](picture/image-20210904084516274.png)
 
 
 
-![image-20210904084525739](Kafka.assets/image-20210904084525739.png)
+![image-20210904084525739](picture/image-20210904084525739.png)
 
-![image-20210904084536660](Kafka.assets/image-20210904084536660.png)
+![image-20210904084536660](picture/image-20210904084536660.png)
 
 #### 2.5 日志索引
 
@@ -1472,7 +1472,7 @@ Kafka 中的索引文件以稀疏索引（ sparse index ）的方式构造消息
 
 ( 2) position：物理地址，也就是消息在日志分段文件中对应的物理位置，占用 4 个字节。
 
-![image-20210904085458693](Kafka.assets/image-20210904085458693.png)
+![image-20210904085458693](picture/image-20210904085458693.png)
 
 消息的偏移量（ offset ）占用 8 个字节，也可以称为绝对偏移量 。 索引项中没有直接使用绝
 
@@ -1482,7 +1482,7 @@ Kafka 中的索引文件以稀疏索引（ sparse index ）的方式构造消息
 
 时间戳索引项的格式如图 5-11 所示
 
-![image-20210904085636665](Kafka.assets/image-20210904085636665.png)
+![image-20210904085636665](picture/image-20210904085636665.png)
 
 每个索 引 项占用 12 个字节， 分为两个部分。
 
@@ -1508,7 +1508,7 @@ Kafka 将 消息存储在磁盘中，为了 控制磁盘占用空间的不断增
 
 1. 基于时间：日志删除任务会检查当前日志文件中是否有保留时间超过设定的阙值(retentionMs)来寻 找可删除的日志分段文 件集合(deletableSegments) , 如图5-13 所示。retentionMs 可以通过 broker 端参数log.retention.hours、log.retentien.minutes和log.retention.ms来配 置 ， 其 中 log.retention.ms 的优先级最 高 ， log.retention.minutes 次之， log.retention.hours最低。 默认情况下只配置 了log.retention.hours参数， 其值为 168, 故默认情况下日志分段文件的保留时间为7天。
 
-![image-20210904090201357](Kafka.assets/image-20210904090201357.png)
+![image-20210904090201357](picture/image-20210904090201357.png)
 
 查找过期的日志分段文件，并不是简单地根据日志分段的最近修改时间 lastModifiedTime 来计算的， 而是根据日志分段中最大的时间戳largestTimeStamp来计算的。 因为日志分段的 lastModifiedTime可以被有意或无意地修改， 比如执行了touch操作 ， 或者分区副本进行了重新 分配， lastModifiedTime并不能真实地反映出日志分段在磁盘的保留时间。要获取日志分段中的 最大时间戳largestTimeStamp的值， 首先要查询该日志分段所对应的时间戳索引文件，查找 时 间戳索引文件中最后 一 条索引项， 若最后 一 条索引项的时间戳字段值 大于0,则取其值， 否则 才设置为最近修改时间 lastModifiedTime 。
 
@@ -1520,7 +1520,7 @@ Kafka 将 消息存储在磁盘中，为了 控制磁盘占用空间的不断增
 
 日志删除任务会检查当前日志的大小是否超过设定的阀值 (retentionSize)来寻找 可删除的 日志分段的文件集合(deletableSegments), 如图5-14所示。retentionSize可以通过 broker端参 数log.retention.by 七 es来配置 ，默认值为-1 , 表示无穷大。注意log.re tention.bytes 配置的是Log中所有日志文件的总大小， 而不是单个日志分段（确切地说应该为log 日志文件） 的大小。
 
-![image-20210904090441339](Kafka.assets/image-20210904090441339.png)
+![image-20210904090441339](picture/image-20210904090441339.png)
 
 3. 基于日志起始偏移量
 
@@ -1534,13 +1534,13 @@ Kafka 将 消息存储在磁盘中，为了 控制磁盘占用空间的不断增
 
 (3)日志分段3的下 一 个日志偏移量在logStartOffset的右侧， 故从日志分段3开始的所 有日志分段都不会 加入deletableSeg ments。
 
-![image-20210904090647064](Kafka.assets/image-20210904090647064.png)
+![image-20210904090647064](picture/image-20210904090647064.png)
 
 ##### 2.6.2 日志压缩
 
 Kafka中的Log Compaction是指在默认的日志删除(Log Retention)规则之外提供的 一 种 清理过时数据的方式。 如图5-16所示， Log Compaction对千有相同key的不同value值， 只保 留最后 一个版本。
 
-![image-20210904090738344](Kafka.assets/image-20210904090738344.png)
+![image-20210904090738344](picture/image-20210904090738344.png)
 
 Log Compaction执行前后， 日志分段中的每条消息的偏移量和写入时的偏移量保待 一 致。 Log Compaction 会生成新的日志分段 文件， 日志分段中每条消息的物理位置会重新按照新文件 来组织。 Log Compaction执行过后的偏移量不再是连续的， 不过这并不影响日志的查询。
 
@@ -1548,13 +1548,13 @@ Log Compaction执行前后， 日志分段中的每条消息的偏移量和写�
 
 通过检查点cleaner checkpoint来划分出 一个 已经清理过的clean部分 和一 个还未清理过的 dirty 部分。 在日志清理的同时， 客户端也可以读取日志中的消息。 dirty 部分的消息偏移量是逐 一递增的， 而 clean 部分的消息偏移量是断续的，如果客户端总能赶上 dirty部分， 那么它就能读取日志的所有消息， 反之就不可能读到全部的消息。
 
-![image-20210904090909840](Kafka.assets/image-20210904090909840.png)
+![image-20210904090909840](picture/image-20210904090909840.png)
 
 如图5-19所示，假设所有的参数配置都 为默认值，在Log Compaction之前checkpoint的初 始值为 0。 执行第 一 次 Log Compaction 之 后， 每个非活跃的日志分段的大小都有所缩减， checkpoint的值也有所 变化。 执行第二次Log Compaction时会组队成[0.4GB, 0.4GB]、[0.3GB, 0.7GB]、[0.3GB]、[1GB]这4个分组，并且从第二次Log Compaction 开始还会涉及墓碑 消息的 清除。同理，第三次Log Compaction过后的情形可参考图5-19的尾部。Log Compaction过程中 会将每个日志分组中需要保留的消息复制到 一 个以".clean" 为后缀的临时文件中， 此 临时文件 以当前 日志分组中第 一 个日志分段的文件名命名， 例如00000000000000000000.log.clean。 Log Compaction过后 将".clean"的文件修改为".swap"后缀的文件，例如： 00000000000000000000. log.swap。 然后 删除原本的日志文件， 最后才把文件的".swap" 后缀去掉。 整个过程中的索引
 
 文件的变换也是如此， 至此 一 个完整Log Compaction操作才算完成。
 
-![image-20210904091441135](Kafka.assets/image-20210904091441135.png)
+![image-20210904091441135](picture/image-20210904091441135.png)
 
 #### 2.7 磁盘存储
 
@@ -1574,7 +1574,7 @@ Kafka 在设计时采用了文件追加的方式来写 入消息， 即只能在
 
 一 共包含了43种协议类型， 每种协议类型都有对应的请求 (Request)和响应(Response), 它们都遵守特定的协议模式 。 每种类型的Request都包含相同 结构的协议请求头(RequestHeader)和不同结构的协议请求体(RequestBody) , 如 图6-1所示。
 
-![image-20210904131115687](Kafka.assets/image-20210904131115687.png)
+![image-20210904131115687](picture/image-20210904131115687.png)
 
 协议请求头中包含4个域（Field): api_key、 api_version、 correlation_id和client_id
 
@@ -1587,7 +1587,7 @@ Kafka 在设计时采用了文件追加的方式来写 入消息， 即只能在
 
 每种类型的Response也包含相同结构的协议响应头(ResponseHeader)和不同结构的响应 体(ResponseBody) , 如图6-2所示。
 
-![image-20210904131355654](Kafka.assets/image-20210904131355654.png)
+![image-20210904131355654](picture/image-20210904131355654.png)
 
 协议响应头中只有 一个correlation_id
 
@@ -1613,7 +1613,7 @@ Kafka 在设计时采用了文件追加的方式来写 入消息， 即只能在
 
 从Kafka建立之初， 其所支待的协议类型就 一 直在增加， 并且对特定的协议类型而言， 内部的 组织结构也并非 一 成不变。 以ProduceRequest/ ProduceResponse为例， 截至目前就经历了7个 版本(v0-v6)的变迁。 下面就以最新版本(V6, 即api_version = 6)的结构为例来做细致的 讲解。 ProduceRequest的组织结构如图6-3所示。
 
-![image-20210904132137763](Kafka.assets/image-20210904132137763.png)
+![image-20210904132137763](picture/image-20210904132137763.png)
 
 除了请求头中的4个域， 其余ProduceRequest请求体中各个域的含义如表6-3所示
 
@@ -1632,7 +1632,7 @@ Kafka 在设计时采用了文件追加的方式来写 入消息， 即只能在
 
 如果参数acks设置非0值， 那么生产者客户端在发送ProduceRequest请求之后就需要（异 步）等待服务端的响应ProduceResponse。对ProduceResponse而言，V6版本中ProduceResponse 的组织结构如图6-4所示
 
-![image-20210904132602866](Kafka.assets/image-20210904132602866.png)
+![image-20210904132602866](picture/image-20210904132602866.png)
 
 | 域(Field)类型       | 类型   | 描述(Description)                                            |
 | ------------------- | ------ | ------------------------------------------------------------ |
@@ -1650,7 +1650,7 @@ Kafka 在设计时采用了文件追加的方式来写 入消息， 即只能在
 
 下面就以最新版本(V8)的结构为例来做细致的讲解.FetchRequest的组织结构如图6-5所 示
 
-![image-20210904133229045](Kafka.assets/image-20210904133229045.png)
+![image-20210904133229045](picture/image-20210904133229045.png)
 
 | 域(Field)             | 类 型  | 描述(Description)                                            |
 | --------------------- | ------ | ------------------------------------------------------------ |
@@ -1677,7 +1677,7 @@ Kafka从1.1.0版本开始针对FetchRequest引入了session_id、epoch和 forgot
 
 与FetchRequest对应的FetchResponse的组织结构(V8版本）
 
-![image-20210904134023140](Kafka.assets/image-20210904134023140.png)
+![image-20210904134023140](picture/image-20210904134023140.png)
 
 FetchResponse结构中的域也 很多， 它主要分为4层， 第1层包含throttle_time_ms、 error_code、 session_id和 responses, 前面3 个域都见过， 其中session_id和 Fetc hReq u est中的 session_id 对应。 responses是 一 个数组类型， 表示响应的具体内容， 也 就是 Fetc hResp onse结构中的第 2 层， 具体地细化到每个分区的响应。 第3层中包含分区的元 数据信 息(partition、 error code 等 ） 及具 体 的 消息内 容 (record set) ,aborted_transactions和事务相关。
 
@@ -1689,7 +1689,7 @@ Kafka中的时间轮(TimingWheel)是 个存储定时任务的环形队列， 底
 
 时间轮由多个时间格组成， 每个时间格代表当前时间轮的基本时间跨度(tickMs)。 时间 轮的时间格个数 是固定的，可用wheelSize来表示， 那么 整个时间轮的总体时间跨度(interval) 可以通过公式tickMs X wheelSize计算得出。 时间轮 还有 一 个表 盘指针(currentTime) , 用来表 示 时间轮当前所处的时间，currentTime 是tick Ms的整 数倍。 currentTime可以将整个时间轮划分 为到期部分和未到期部分， currentTime当前指向的时间格也属千到期部分， 表示刚好到期， 需 要 处 理此 时间格 所对 应的TimerTaskList中的所有任务。
 
-![image-20210904134404741](Kafka.assets/image-20210904134404741.png)
+![image-20210904134404741](picture/image-20210904134404741.png)
 
 若时间轮的 tickMs为lms且wheelSize等于20, 那么可以计算得出总体时间跨度interval 为20ms。 初始情况下表盘指针cur r entTime指向时间格O, 此时有 一 个定时为2ms的任务插进 来会存放到时间格为2的TimerTaskList中。 随着时间的不断推移， 指针CWTentTime不断向前 推进， 过了2ms之后， 当到达时间格2时， 就需要将时间格2对应的TimeTaskList 中的任务进 行相应的到期操作。 此时若 又有 一 个定时为 8ms 的任务插进来， 则会存放到时间格 10 中， cur r entTime再过 8ms后会指向时间格10。 如果同时有 一 个定时为19ms的任务插进来怎么办？ 新来的TimerTaskEntry会复用原来的TimerTaskList , 所以它会插入原本已经到期的时间格1。 总之， 整个时间轮的总体跨度是不变的， 随着指针cur r entTime的不断推进， 当前时间轮所能处 理的时间段也在不断后移， 总体时间范围在 cWTentTime和CWTentTime+interval之间 。
 
@@ -1699,7 +1699,7 @@ Kafka中的时间轮(TimingWheel)是 个存储定时任务的环形队列， 底
 
 复用之前的案例，第 一层的时间轮 tickMs = 1ms、wheelSize = 20、inter 第二层的时间轮的 tickMs为第 一 层时间轮的int erval, 即20ms。每 一 层时间轮的wheelSize是固 定的， 都是 20, 那么第二层的时间轮的总体时间跨度interval为400ms。以此类推 ， 这个 400ms 也是第三层的 tickMs的大小， 第三层的时间轮的总体时间跨度为8000ms。
 
-![image-20210904134710524](Kafka.assets/image-20210904134710524.png)
+![image-20210904134710524](picture/image-20210904134710524.png)
 
 ### 10.3 延时操作
 
@@ -1713,7 +1713,7 @@ Kafka中的时间轮(TimingWheel)是 个存储定时任务的环形队列， 底
 
 图 6-12描绘了客户端在请求写入消息到收到响应结果的过程中与延时生产操作相关的细 节， 在了解相关的概念之后应该比较容易理解： 如果客户端设置的acks参数不为-1, 或者没 有成功的消息写入， 那么就直接返回结果给客户端， 否则就需要创建延时生产操作并存入延时 操作管理器， 最终要么由外部事件触发， 要么由超时触发而执行
 
-![image-20210904135345527](Kafka.assets/image-20210904135345527.png)
+![image-20210904135345527](picture/image-20210904135345527.png)
 
 有延时生产就有延时拉取.Kafka选择了延时操作来处理这种情况。Kafka 在处理拉取请求时，会先读取 一 次日志文件， 如果收集不到足够多(fetchMinBytes , 由参数fetch.min.bytes配置，默认值为l)的消息， 那么就会创建 一 个延时拉取操作(DelayedFetch)以等待拉取到足够数量的消息。 当延时拉取操 作执行时， 会再读取 一次日志文件， 然后将拉取结果返回给follower副本。
 
@@ -1745,7 +1745,7 @@ ZooKeeper 中还有 一 个与控制器有关的/controller_epoch节点， 这�
 +  更新集群的元数据信息。
 + 如果参数auto.leader.rebalance.enable设置为 true, 则还会开启 一 个名为 "auto-leader-rebalance-task"的定时任务来 负责维护 分区的优先副本的均衡 。
 
-![image-20210904140120956](Kafka.assets/image-20210904140120956.png)
+![image-20210904140120956](picture/image-20210904140120956.png)
 
 /controller 节点的数据发生变化时， 每个 broker 都会更新自身内存中保存 的 activeControllerld 。 如果 broker 在数据变更前是控制器， 在数据变更后自身的 brok erid 值与 新的 activeControllerld 值不 一 致， 那么就需要 “ 退位 ” ， 关闭相应的资源， 比如关闭状态机、 注销相应的监听器等。 有可能控制器由于异常而下线， 造成 /controller 这个临时节点被自 动删除； 也有可能是其他原因将此节点删除了。
 
@@ -1787,7 +1787,7 @@ bootstrap.servers 不仅是 Kafka Producer、 Kafka Consumer 客户端 中的必
 
 我们一般可以简单地认为 bootstrap.servers 这个参数所要指定的就是将要连接的 Kafka 集群的 broker 地址列表。不过从深层次的意义上来讲，这个参数配置的是用来发现 Kafka 集群元数据信息的服务地址。为了更加形象地说明问题，我们先来看一下图 6- 19 。
 
-![image-20210904141015675](Kafka.assets/image-20210904141015675.png)
+![image-20210904141015675](picture/image-20210904141015675.png)
 
 客户端 KafkaProducer1 与 Kafka Cluster 直连，这是客户端给我们的既定印象，而事实上客 户端连接 Kafka 集群要经历以下 3 个过程，如图 6-19 中的右边所示。
 
@@ -1922,7 +1922,7 @@ type BalanceStrategy interface {
 
 参考图7-4, 与/consumers/<group>/ids 同级的还有两个节点： owners和 offsets, /consumers/<group>/owner 路径下记录了分区和 消费者的对应关系，/consumers/ <group>/offsets路径下记录了此消费组 在 分区中对应的消费位移 。
 
-![image-20210905091109447](Kafka.assets/image-20210905091109447.png)
+![image-20210905091109447](picture/image-20210905091109447.png)
 
 每个broker、 主题和 分区在ZooKeeper中也都 对应 一 个路径 ： /brokers/ids/<id>记录 了host、port及分配在 此broker上的主题 分区列表； /brokers/topics/<topic>记录了每 个分区的 leader 副本、ISR集合等信息。/brokers/topics/<top乓>/partitions/ <parti巨on>/state 记录了当前leader副本、leader—epoch等信息
 
@@ -1952,7 +1952,7 @@ ConsumerCoordinator与GroupCoordinator之间最重要的职责就是负责执行
 
 FindCoordinatorRequest请求体中只有两个域(Field): coordinator_key  和 coordinator_ type。coordina or— key在这里就是消费组的名称，即 groupid, coordinator_type置为 0。 这个FindCoordinatorRequest请求还会在Kafka事务（参考7.4.3 节）中提及，为了便于说明问题，这里我们暂且忽略它。
 
-![image-20210905091358616](Kafka.assets/image-20210905091358616.png)
+![image-20210905091358616](picture/image-20210905091358616.png)
 
 Kafka 在收到 FindCoordinatorRequest 请求之后，会根据 coordinator— key(也就是 gr oupld)查找对应的GroupCoordinator节点，如果找到对应的GroupCoordinator则会返回其相 对应的 node_id、host和port信息。
 
@@ -1972,7 +1972,7 @@ rebalance timeout 对应消费端参数 max .poll . interva l.ms ， 默认值 �
 
 memb er_i d 表示 GroupCoordinator 分配给消费者 的 id 标识。 消 费者第一次发送 J oinGroupRequest 请求的时候此字段设置为 nulla  pr o toc o l_type 表示消费组实现的协议 ，对于消费者而言此字段值为“ consumer”。
 
-![image-20210905091854393](Kafka.assets/image-20210905091854393.png)
+![image-20210905091854393](picture/image-20210905091854393.png)
 
 **选举消费纽的 leader**
 
@@ -1982,13 +1982,13 @@ GroupCoordinator 需要为消费组内的消费者选举出一个消费组的 le
 
 leader 消 费者根据在第二阶段中选举 出来的分区分配策略来实施具体的分区分配， 在此之 后需要将分配的方案同步给各个消费者， 此时 leader 消费者并不是直接和其余的普通消费者同 步分配方案， 而是通过 GroupCoordinator 这个“中间人”来负 责转发同步分配方案的
 
-![image-20210905092103256](Kafka.assets/image-20210905092103256.png)
+![image-20210905092103256](picture/image-20210905092103256.png)
 
 **消费纽元数据信息**
 
 我们知道消费者客户端提交的消费位移会保存在 Kafka 的 consumer offsets 主题中，这里 Ea I 3b e也一样，只不过保存的是消费组的元数据信息 （ GroupMetadata ） 。具体来说，每个消费组的元 数据信息都是一条消息，不过这类消息并不依赖于具体版本的消息格式，因为它只定义了消息 中的 key 和 value 字段的具体内容，
 
-![image-20210905092250882](Kafka.assets/image-20210905092250882.png)
+![image-20210905092250882](picture/image-20210905092250882.png)
 
 protocol type ：消费组实现的协议，这里的值为“ consumer”。 
 
@@ -2010,7 +2010,7 @@ members ： 数组类型，其中包含了消费组的各个消费者成员信�
 
 一般情况下， 当集群中第一 次有消费者消费消息时会自动创建主题 consumer offsets ，不 过它的副本因子还受 offsets. topic.replication. factor 参数的约束， 这个参数的默认值为 3 （下载安 装的包中此值可能为 1 ），分区数可以通过 offsets.topic.num.partitions 参数设置， 默认为 50 。客 户端提交消费位移是使用。 他etCommitRequest 请求实现的， OffsetCommitRequest
 
-![image-20210905093130686](Kafka.assets/image-20210905093130686.png)
+![image-20210905093130686](picture/image-20210905093130686.png)
 
 retention time 表示当前提交的消费位移所能保留的时长， 不过对于消费者而言 这个值保持为 I 。也就是说， 按照 broker 端的配置 o ffsets . retention . minutes 来确定 保留时长 。 offsets . retention . minutes 的默认值为 10080 ，即 7 天，超过这个时间后消 费位移的信息就会被删除（使用墓碑消息和日志压缩策略） 。
 
@@ -2020,11 +2020,11 @@ retention time 表示当前提交的消费位移所能保留的时长， 不过�
 
 value 中包含了 5 个字段，除 version 宇段外，其余的 offset 、 metadata 、 commit times tamp、 expire timestamp 宇段分别表示消费位移、自定义的元数据信息、位移提交 到 Kafka 的时间戳、消费位移被判定为超时的时间戳 。
 
-![image-20210905093339183](Kafka.assets/image-20210905093339183.png)
+![image-20210905093339183](picture/image-20210905093339183.png)
 
 在处理完消费位移之后， Kafka 返回 OffsetCommitResponse 给客户端
 
-![image-20210905093358226](Kafka.assets/image-20210905093358226.png)
+![image-20210905093358226](picture/image-20210905093358226.png)
 
 ### 11.4 事务
 
@@ -2062,7 +2062,7 @@ transactionalld 与 PID 一一对应 ，两者之间所不同的是 transactiona
 
 为了实现事务的功能， Kafka还引入了事务协调器(TransactionCoordinator)来负责处理事 一 一 一 一 务， 这 点可以类比 下组协调器(GroupCoordinator)。 每 个生产者都会被指派 个特定的 TransactionCoordinator, 所有的事务逻辑包括分派PID等都是由TransactionCoordinator来负责 实施的。TransactionCoordinator会将事务状态持久化到内部主题_transaction_state中。 下面就 以最复杂的consume-transform-produce的流程（参考图7-21)为例来分析Kafka 事务的实现原 理。
 
-![image-20210905094345630](Kafka.assets/image-20210905094345630.png)
+![image-20210905094345630](picture/image-20210905094345630.png)
 
 1. 查找TransactionCoordinator
 
@@ -2077,7 +2077,7 @@ Kafka在收到FindCoorinatorRequest 请求之后， 会根据 coordinator_key (�
 
 ## 12_Kafka文件存储
 
-![img](Kafka学习.assets/06-8603396.png)
+![img](picture/06-8603396.png)
 
 由于生产者生产的消息会不断追加到 log 文件末尾， 为防止 log 文件过大导致数据定位效率低下， Kafka 采取了**分片**和**索引**机制，将每个 partition 分为多个 segment。
 
@@ -2094,7 +2094,7 @@ Kafka在收到FindCoorinatorRequest 请求之后， 会根据 coordinator_key (�
 
 index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下图为 index 文件和 log文件的结构示意图。
 
-![img](Kafka学习.assets/07.png)
+![img](picture/07.png)
 
 **“.index”文件存储大量的索引信息，“.log”文件存储大量的数据**，索引文件中的元数据指向对应数据文件中 message 的物理偏移地址。
 
@@ -2140,31 +2140,31 @@ Kafka 在启动的时候会开启两个与ISR相关的定时任务，名称分�
 
 之后follower副本 （不带阴影的方框）向leader副本拉取消息， 在拉取的请求中会带有自 身的LEO信息， 这个LEO信息对应的是FetchReques t请求中的fetch_offset 。leader副本 返回给follower副本相应的消息，并且还带有自身的HW信息， 如图8-5所示，这个HW信息 对应的是FetchResponse中的high_watermark。
 
-![image-20210905100921145](Kafka.assets/image-20210905100921145.png)
+![image-20210905100921145](picture/image-20210905100921145.png)
 
 #### 13.1.4 Leader Epoch介入
 
 首先我们来看 一 下数据丢失的问题， 如图8-9所示， Replica B是当前的leader 副本（用 L 标记）， Replica A是follower 副本。 参照8.1.3节中的图8-4至图8-7的 过程来进行分析：在某 一时刻， B中有2条消息 ml和m2 , A从B中 同步了这两条消息， 此时A和B的LEO都为2, 同时HW 都为l; 之后A再向B中发送请求以拉取消息， FetchRequest请求中带上了A的LEO 信息， B 在收到请求之后 更新了自己的HW为2; B中虽然没有更多的消息， 但还是在 延时一  段时间之后（参考6. 3节中的延时拉取）返回FetchResponse, 并在其中包含了HW信息；最后 A 根据FetchResponse中的 HW信息 更新自己的HW为2。
 
-![image-20210905101317529](Kafka.assets/image-20210905101317529.png)
+![image-20210905101317529](picture/image-20210905101317529.png)
 
 可以看到整个过程中两者之间的 HW 同步有一个问隙， 在 A 写入消息 m2 之后 C LEO 更新 为 2 ）需要再一轮的 FetchRequest/ FetchR巳sponse 才能更新自身的 HW 为 2 。如图 8- 10 所示， 如 果在这个时候 A 岩机了 ，那么在 A 重启之后会根据之前 HW 位置（这个值会存入本地的复制 点文件 replication-offset-checkpoint ）进行日志截断 ， 这样便会将 m2 这条消息删除 ，此时 A 只 剩下 ml 这一条消息， 之后 A 再向 B 发送 FetchRequest 请求拉取消息。
 
-![image-20210905101343163](Kafka.assets/image-20210905101343163.png)
+![image-20210905101343163](picture/image-20210905101343163.png)
 
 此时若 B 再右机， 那么 A 就会被选举为新的 leader， 如图 8-1 l 所示。 B 恢复之后会成为 follower， 由于 follower 副本 HW 不能 比 leader 副本的 HW 高，所 以还会做一次日志截断 ，以此 将 HW 调整为 l 。这样一来 m2 这条消息就丢失了（就算 B 不能恢复 ， 这条消息也同样丢失）。
 
-![image-20210905101359800](Kafka.assets/image-20210905101359800.png)
+![image-20210905101359800](picture/image-20210905101359800.png)
 
 如图 8-12 所示， 当前 leader 副本为 A, follower 副本为 B , A 中有 2 条消息 m l 和 m2 ，并 且 HW 和 LEO 都为 2, B 中 有 1 条消息 ml ， 井且 HW 和 LEO 都为 l 。假设 A 和 B 同时“挂掉”，然后 B 第一个恢复过来并成为 leader，如图 8-13 所示 。
 
-![image-20210905101458102](Kafka.assets/image-20210905101458102.png)
+![image-20210905101458102](picture/image-20210905101458102.png)
 
 之后 B 写入消息 m3 ， 并将 LEO 和 HW 更新至 2 （假设所有场景中的 rnin . insync.replicas 参数配置为 1 ） 。此时 A 也恢复过来了，根据前面数据丢失场景 中的介绍可知它会被赋予 follower
 
 的角色，井且需要根据 HW 截断日志及发送 FetchRequest 至 B ，不过此时 A 的 HW 正好也为 2, 那么就可以不做任何调整了，如图 8-14 所示 。
 
-![image-20210905101510068](Kafka.assets/image-20210905101510068.png)
+![image-20210905101510068](picture/image-20210905101510068.png)
 
 如此一来 A 中保留了 m2 而 B 中没有， B 中新增了 m3 而 A 也同步不到，这样 A 和 B 就出 现了数据不一致的情形 。
 
@@ -2174,13 +2174,13 @@ Kafka 在启动的时候会开启两个与ISR相关的定时任务，名称分�
 
 下面我们再来看一下 引入 leader epoch 之后如何应付前面所说的数据丢失和数据不一致 的 场景。首先讲述应对数据丢失的问题，如图 8- 15 所示，这里只 比 图 8-9 中多了 LE (LeaderEpoch 的缩写 ，当前 A 和 B 中的 LE 都为 0 ） 。
 
-![image-20210905101602038](Kafka.assets/image-20210905101602038.png)
+![image-20210905101602038](picture/image-20210905101602038.png)
 
 同样 A 发生重启 ，之后 A 不是先忙着截断日志而是先发送 OffsetsF orLeaderEpochRequest 请求给 B ( OffsetsForLeaderEpochRequest 请求体结构 如 图也16 所示 ，其中包含 A 当前 的 LeaderEpoch 值） ' B 作为目前的 leader 在收到请求之后会返回当 前的 LEO
 
-![image-20210905102847105](Kafka.assets/image-20210905102847105.png)
+![image-20210905102847105](picture/image-20210905102847105.png)
 
-![image-20210905101934961](Kafka.assets/image-20210905101934961.png)
+![image-20210905101934961](picture/image-20210905101934961.png)
 
 如果 A 中的 LeaderEpoch （假设为 LE_A ）和 B 中的不相同，那么 B 此时会查找 LeaderEpoch 为 LE A+l 对应的 StartOffset 并返回给 A ，也就是 LE A 对应的 LEO ，所以我们可以将 OffsetsF orLeaderEpochRequest 的请求看作用来查找 follower 副本当前 LeaderEpoch 的 LEO 。
 
@@ -2198,7 +2198,7 @@ Kafka 在启动的时候会开启两个与ISR相关的定时任务，名称分�
 
 紧接着A也恢复过来成为follower并向B发送OffsetsForLeaderEpochRequest请求，此时A 的 LeaderEpoch为LEO。 B根据LEO查询到对应的offset为1并返回给A, A就截断日志并删 除了消息m2, 如图8-22所示。 之后A发送FetchRequest至B请求来同步数据
 
-![image-20210905102044488](Kafka.assets/image-20210905102044488.png)
+![image-20210905102044488](picture/image-20210905102044488.png)
 
 #### 13.1.5 为什么不支持读写分离
 
@@ -2210,7 +2210,7 @@ Kafka 在启动的时候会开启两个与ISR相关的定时任务，名称分�
 
 为保证 producer 发送的数据，能可靠的发送到指定的 topic， topic 的每个 partition 收到producer 发送的数据后，都需要向 producer 发送 ack（acknowledgement 确认收到），如果producer 收到 ack， 就会进行下一轮的发送，否则重新发送数据。
 
-![img](Kafka学习.assets/09-8642292.png)
+![img](picture/09-8642292.png)
 
 **如何发送ack**
 
@@ -2254,11 +2254,11 @@ Leader 维护了一个动态的 **in-sync replica set** (ISR)，意为和 leader
 - 0： producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟， broker 一接收到还没有写入磁盘就已经返回，当 broker 故障时有可能**丢失数据**；
 - 1： producer 等待 broker 的 ack， partition 的 leader 落盘成功后返回 ack，如果在 follower同步成功之前 leader 故障，那么将会**丢失数据**；
 
-![img](Kafka学习.assets/10-8643879.png)
+![img](picture/10-8643879.png)
 
 - -1（all） ： producer 等待 broker 的 ack， partition 的 leader 和 ISR 的follower 全部落盘成功后才返回 ack。但是如果在 follower 同步完成后， broker 发送 ack 之前， leader 发生故障，那么会造成**数据重复**。
 
-![img](Kafka学习.assets/11-8643900.png)
+![img](picture/11-8643900.png)
 
 ```markdown
 acks
@@ -2281,49 +2281,49 @@ Importance:	high
 
 在 Kafka 中，我们可以通过 kafka-consumer-groups.sh 脚本查看或变更消费组的信息 。 我们 可以通过 list 这个指令类型 的参数来罗列出当前集群 中所有的消费组名称
 
-![image-20210905110756334](Kafka.assets/image-20210905110756334.png)
+![image-20210905110756334](picture/image-20210905110756334.png)
 
 kafka-consumer-groups.sh 脚本还可以配合 describe 这个指令类型的参数来展示某一个消 费组的详细信息， 不过要完成此功能还需要配合 group 参数来一 同实现
 
-![image-20210905110814002](Kafka.assets/image-20210905110814002.png)
+![image-20210905110814002](picture/image-20210905110814002.png)
 
 消费组一共有 Dead、 Empty 、 PreparingRebalance 、 CompletingRebalance 、 Stable 这几种状 态，正常情况下， 一个具有消费者成员的消费组的状态为 Stable。 我们可以通过 state 参数来 查看消费组当前的状态 ， 示例如下
 
-![image-20210905110842664](Kafka.assets/image-20210905110842664.png)
+![image-20210905110842664](picture/image-20210905110842664.png)
 
 我们还可以通过 members 参数罗列出消费组内的消费者成员信息，参考如下：
 
-![image-20210905110855210](Kafka.assets/image-20210905110855210.png)
+![image-20210905110855210](picture/image-20210905110855210.png)
 
 如果在此基础上再增加一个 verbose 参数，那么还会罗列出每个消费者成员的分配情况， 如下所示 。
 
-![image-20210905110903586](Kafka.assets/image-20210905110903586.png)
+![image-20210905110903586](picture/image-20210905110903586.png)
 
 我们可 以通过 delete 这个指令类型的参数来删除一个指定的消费组，不过如果消费组中 有消费者成员正在运行，则删除操作会失败
 
-![image-20210905110917693](Kafka.assets/image-20210905110917693.png)
+![image-20210905110917693](picture/image-20210905110917693.png)
 
 ### 16.2 消费位移管理i
 
 kafka-consumer-groups.sh 脚本还提供了重置消费组内消费位移的功能，具体是通过 reset-off sets 这个指令类型的参数来实施 的。，不过实现这一功能的前提是消费组内没有正 在运行的消费者成员。
 
-![image-20210905111003937](Kafka.assets/image-20210905111003937.png)
+![image-20210905111003937](picture/image-20210905111003937.png)
 
 可 以 通过将一all-t。 pies 修改为一t。 pie 来实现更加细粒度的消费位移的重量 ， all -t。 pies 参数指定了消费组中所有主题，而 topic 参数可 以指定j在个主题 ， 甚至可 以是 主题中的若平分区 。下面的示例将主题 topic-monitor 分区 2 的消费位移置为分区 的末尾：
 
-![image-20210905111023005](Kafka.assets/image-20210905111023005.png)
+![image-20210905111023005](picture/image-20210905111023005.png)
 
-![image-20210905111041736](Kafka.assets/image-20210905111041736.png)
+![image-20210905111041736](picture/image-20210905111041736.png)
 
 ### 16.3 手动删除消息
 
 下 面使用 kafka-delete-records. sh 脚本来删除部分消息 。 在执行具体的删除动作之前需要 先配置一个 JSON 文件 ，用来指定所要删除消息的分区及对应的位置 。 我们 需要分别删除主 题 topic-monitor 下 分区 。 中偏移 量为 l O 、分区 l 中偏移量 为 l I 和分区 2 中偏移量 为 1 2 的 消息：
 
-![image-20210905111150365](Kafka.assets/image-20210905111150365.png)
+![image-20210905111150365](picture/image-20210905111150365.png)
 
 之后将这段内容保存到文件中， 比如取名为 delete.json, 在此之后， 我们就可以通过 kafka-delete-records.sh 脚本中的 offset-json-file 参数来指定这个 JSON 文件。具体的删除 操作如下：
 
-![image-20210905111201161](Kafka.assets/image-20210905111201161.png)
+![image-20210905111201161](picture/image-20210905111201161.png)
 
 ### 16.4 Kafka Connect
 
@@ -2331,7 +2331,7 @@ Kafka Connect 是 一 个工具， 它为在 Kafka 和外部数据存储系统�
 
 Kafka Connect 有两个核心概念： Source 和 Sink。参考图 9-1, Source 负责导入数据到 Kafl<a, Sink 负责从 Kafka 导出数据， 它们都被称为 Connector C连接器）。
 
-![image-20210905111749827](Kafka.assets/image-20210905111749827.png)
+![image-20210905111749827](picture/image-20210905111749827.png)
 
 在 Kafka Connect 中还有两个重要的概念： Task 和 Worker。 Task 是 Kafka Connect 数据模型 的主角，每 一 个 Connector 都会协调 一 系列的 Task 去执行任务， Connector 可以把 一 项工作分割 成许多 Task, 然后把 Task 分发到各个 Worker 进程中去执行（分布式模式下）， Task 不保存自 己的状态信息， 而是交给特定的 Kafka 主题去保存。 Connector 和 Task 都是逻辑工作单位， 必 须安排在进程中执行， 而在 Kafka Connect 中， 这些进程就是 Worker 。
 
@@ -2411,7 +2411,7 @@ Kafka 有两种分配策略：
 
 - 首先将所有的partition和consumer按照字典序进行排序，所谓的字典序，就是按照其名称的字符串顺序，那么上面的六个分区和三个consumer排序之后分别为：
 
-![img](Kafka学习.assets/16-8684924.png)
+![img](picture/16-8684924.png)
 
 - 然后依次以按顺序轮询的方式将这六个分区分配给三个consumer，如果当前consumer没有订阅当前分区所在的topic，则轮询的判断下一个consumer：
 - 尝试将t0-0分配给C0，由于C0订阅了t0，因而可以分配成功；
@@ -2423,7 +2423,7 @@ Kafka 有两种分配策略：
 - 同理由于t2-1和t2-2所在的topic都没有被C0和C1所订阅，因而都不会分配成功，最终都会分配给C2。
 - 按照上述的步骤将所有的分区都分配完毕之后，最终分区的订阅情况如下：
 
-![img](Kafka学习.assets/17-20210811203005180.png)
+![img](picture/17-20210811203005180.png)
 
 从上面的步骤分析可以看出，轮询的策略就是简单的将所有的partition和consumer按照字典序进行排序之后，然后依次将partition分配给各个consumer，如果当前的consumer没有订阅当前的partition，那么就会轮询下一个consumer，直至最终将所有的分区都分配完毕。但是从上面的分配结果可以看出，轮询的方式会导致每个consumer所承载的分区数量不一致，从而导致各个consumer压力不均一。
 
@@ -2436,7 +2436,7 @@ Kafka 有两种分配策略：
 - 同理，按照上面的步骤依次进行后面的topic的分配。
 - 最终上面六个分区的分配情况如下：
 
-![img](Kafka学习.assets/18-8685138.png)
+![img](picture/18-8685138.png)
 
 可以看到，如果按照`Range`分区方式进行分配，其本质上是依次遍历每个topic，然后将这些topic的分区按照其所订阅的consumer数量进行平均的范围分配。这种方式从计算原理上就会导致排序在前面的consumer分配到更多的分区，从而导致各个consumer的压力不均衡。
 
@@ -2486,7 +2486,7 @@ Controller 的管理工作都是依赖于 Zookeeper 的。
 
 以下为 partition 的 leader 选举过程：
 
-![Leader选举流程](Kafka学习.assets/15-8687826.png)
+![Leader选举流程](picture/15-8687826.png)
 
 ## 24_Kafka Range分区
 
@@ -2512,7 +2512,7 @@ Controller 的管理工作都是依赖于 Zookeeper 的。
 
 Kafka 的 Producer 发送消息采用的是**异步发送**的方式。在消息发送的过程中，涉及到了**两个线程——main 线程和 Sender 线程**，以及**一个线程共享变量——RecordAccumulator**。 main 线程将消息发送给 RecordAccumulator， Sender 线程不断从 RecordAccumulator 中拉取消息发送到 Kafka broker。
 
-![img](Kafka学习.assets/19-8689434.png)
+![img](picture/19-8689434.png)
 
 - **batch.size**： 只有数据积累到 batch.size 之后， sender 才会发送数据。
 - **linger.ms**： 如果数据迟迟未达到 batch.size， sender 等待 linger.time 之后就会发送数据。
