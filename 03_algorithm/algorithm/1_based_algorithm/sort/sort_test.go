@@ -29,6 +29,18 @@ func compareSlices(a []int, b []int) (int, bool) {
 	return -1, true
 }
 
+func TestBubbleSort(t *testing.T) {
+	testFramework(t, BubbleSort)
+}
+
+func TestInsertionSort(t *testing.T) {
+	testFramework(t, InsertionSort)
+}
+
+func TestCountingSort(t *testing.T) {
+	testFramework(t, CountingSort)
+}
+
 // TestSelectionSort very slow
 //func TestSelectionSort(t *testing.T) {
 //	testFramework(t, SelectionSort)
