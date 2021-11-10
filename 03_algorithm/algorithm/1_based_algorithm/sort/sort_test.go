@@ -41,6 +41,10 @@ func TestCountingSort(t *testing.T) {
 	testFramework(t, CountingSort)
 }
 
+func TestRadixSort(t *testing.T) {
+	testFramework(t, RadixSort)
+}
+
 // TestSelectionSort very slow
 //func TestSelectionSort(t *testing.T) {
 //	testFramework(t, SelectionSort)

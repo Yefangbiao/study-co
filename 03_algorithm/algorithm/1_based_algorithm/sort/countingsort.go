@@ -25,7 +25,8 @@ func CountingSort(nums []int) []int {
 
 	// 填充结果数组
 	res := make([]int, n)
-	for _, num := range nums {
+	for i := len(nums) - 1; i >= 0; i-- {
+		num := nums[i]
 		res[count[num-min]-1] = num
 		count[num-min]--
 	}
