@@ -41,6 +41,10 @@ func TestCountingSort(t *testing.T) {
 	testFramework(t, CountingSort)
 }
 
+func TestMergeSort(t *testing.T) {
+	testFramework(t, MergeSort)
+}
+
 func TestRadixSort(t *testing.T) {
 	testFramework(t, RadixSort)
 }
