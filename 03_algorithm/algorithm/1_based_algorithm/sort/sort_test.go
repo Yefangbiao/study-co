@@ -58,6 +58,10 @@ func TestRadixSort(t *testing.T) {
 //	testFramework(t, SelectionSort)
 //}
 
+func TestShellSort(t *testing.T) {
+	testFramework(t, ShellSort)
+}
+
 func TestQuickSort(t *testing.T) {
 	testFramework(t, QuickSort)
 }
