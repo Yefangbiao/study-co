@@ -15,7 +15,7 @@ func merge(nums1, nums2 []int) []int {
 	i, j := 0, 0
 
 	for i < len(nums1) && j < len(nums2) {
-		if nums1[i] < nums2[j] {
+		if nums1[i] <= nums2[j] {
 			ans = append(ans, nums1[i])
 			i++
 		} else {
