@@ -62,6 +62,14 @@ func TestShellSort(t *testing.T) {
 	testFramework(t, ShellSort)
 }
 
+func TestHeapSort(t *testing.T) {
+	testFramework(t, HeapSort)
+}
+
+func TestHeapSortGo(t *testing.T) {
+	testFramework(t, HeapSortGo)
+}
+
 func TestQuickSort(t *testing.T) {
 	testFramework(t, QuickSort)
 }
