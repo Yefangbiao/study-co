@@ -37,6 +37,10 @@ func TestInsertionSort(t *testing.T) {
 	testFramework(t, InsertionSort)
 }
 
+func TestBucketSort(t *testing.T) {
+	testFramework(t, BucketSort)
+}
+
 func TestCountingSort(t *testing.T) {
 	testFramework(t, CountingSort)
 }
