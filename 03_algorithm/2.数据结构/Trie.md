@@ -65,7 +65,9 @@ type Trie struct{
 
 ## 基本操作
 
-[一个字典树的基本实现](https://github.com/Yefangbiao/study-co/tree/main/03_algorithm/algorithm/2_data_struct/trie)
+[一个字典树的基本实现](https://github.com/Yefangbiao/study-co/tree/main/03_algorithm/algorithm/2_data_structure/trie)
+
+---
 
 [208. 实现 Trie (前缀树)](https://leetcode-cn.com/problems/implement-trie-prefix-tree/)
 
