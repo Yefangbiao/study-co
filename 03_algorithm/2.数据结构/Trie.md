@@ -73,3 +73,16 @@ type Trie struct{
 
 [835. Trie字符串统计](https://www.acwing.com/problem/content/837/)
 
+
+
+## 练习
+
+[677. 键值映射](https://leetcode-cn.com/problems/map-sum-pairs/)
+
+[648. 单词替换](https://leetcode-cn.com/problems/replace-words/)
+
+[421. 数组中两个数的最大异或值](https://leetcode-cn.com/problems/maximum-xor-of-two-numbers-in-an-array/)
+
+[212. 单词搜索 II](https://leetcode-cn.com/problems/word-search-ii/)
+
+[425. 单词方块](https://leetcode-cn.com/problems/word-squares/)
