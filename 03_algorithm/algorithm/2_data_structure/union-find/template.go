@@ -22,7 +22,7 @@ func NewUnionFindTemplate(num int) *UnionFindTemplate {
 func (u *UnionFindTemplate) Find(x int) int {
 	// 路径压缩
 	if x != u.fa[x] {
-		u.fa[x] = u.fa[u.Find(x)]
+		u.fa[x] = u.Find(u.fa[x])
 	}
 	return u.fa[x]
 }
