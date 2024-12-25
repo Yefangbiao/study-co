@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# 文件名: interactive
+
+case "$-" in
+    *i*) # 在交互式shell中运行的代码位于此处
+    echo This shell is interactive
+     ;;
+    *) # 在非交互式shell中运行的代码位于此处
+    echo This shell is not interactive
+     ;;
+esac
+

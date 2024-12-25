@@ -1,6 +1,8 @@
 package sort
 
-import "math/rand"
+import (
+	"math/rand"
+)
 
 func QuickSort(nums []int) []int {
 	//return quickSort1(nums)

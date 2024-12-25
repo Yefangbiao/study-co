@@ -49,4 +49,6 @@ zookeeper.connect=hadoop102:2181,hadoop103:2181,hadoop104:2181
 
 分区数增加吞吐量下降：https://www.cnblogs.com/felixzh/p/12000883.html
 
-https://www.hyperxu.com/2020/01/01/kafka-3/
+produce保证精确一致性只写入一次
+
+leader和follow 数据丢失和数据不一致

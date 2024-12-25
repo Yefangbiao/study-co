@@ -394,6 +394,12 @@ docker rmi -f $(docker images -qa)	#删除全部
 
 说明：有镜像才能创建容器，我们这里使用 centos 的镜像来测试，就是虚拟一个 centos ！
 
+```bash
+docker image pull <repository>:<tag>
+```
+
+
+
 ```shell
 docker pull centos
 ```
