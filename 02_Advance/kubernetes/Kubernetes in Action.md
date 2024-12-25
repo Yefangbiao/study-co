@@ -2,6 +2,8 @@
 
 [k8s博客](https://kubernetes.io/blog/)
 
+[代码](https://github.com/luksa/kubernetes-in-action),注意有些命令更改了
+
 
 
 ----
@@ -122,4 +124,134 @@ ku-proxy将确保到服务的连接可跨提供服务的容器实现负载均衡
 
 
 # 开始使用Kubernetes和Docker
+
+## 创建、运行及共享容器镜像
+
+---
+
+> 注意，学习Kubernetes前要先学习Docker，推荐《深入浅出Docker》
+
+---
+
+
+
+### 安装Docker并运行Hello World
+
+首先，需要在linux主机上安装Docker 。如果使用的不是Linux操作系统，就需要启动 Linux 虚拟机（ VM ）并在虚拟机中运行 Docker 如果使用的是 Mac、Windows 系统， Docker将会自己启动一个虚拟机并在虚拟机中运行 Docker 守护进程
+
+busybox 是一个单一可执行文件，包含多种标准 UNIX 命令行工具，如 echo、ls 、gzip等。
+
+![image-20241225212517724](picture/image-20241225212517724.png)
+
+下图展示了 执行 `docker run` 之后发生的事情。
+
+Docker 会检查`busybox:latest` 镜像是否己经存在。如果没有， Docker会从 http://docker.io 的Docker 镜像中拉取镜像.之后Docker基于这个镜像创建容器并在容器中运行命令。 
+
+`echo`打印文字 标准输出流，然后进程终止运行。
+
+![image-20241225212748899](picture/image-20241225212748899.png)
+
+> 容器中的版本管理
+
+当然，所有的软包都会更新，所以通常每个包都不止1个版本 。Docker支持同一镜像多版本。每版本必须有唯一的 `tag` 。当没有指定tag时候，Docker会默认指定tag为`latest`.乳沟想要运行别的版本，需要这样指定镜像版本。`docker run <image>:<tag>`
+
+> 创建一个简单的Node.js应用。
+
+这个应用会接收 HTTP 请求并响应应用运行的主机名 。这样 ，应用运行在容器中，看到的是自己的主机名而不是宿主机名，即使它也像其他进程样运行在宿主机上，这在后面会非常有用，当应用部署kubernetes 上并进行伸缩时（水平伸缩，复制应用到多个节点），你会发现 HTTP请求切换到了应用的不同实例上。
+
+应用代码情况如下 `app.js` kubernetes-in-action/Chapter02/kubia/app.js
+
+```js
+const http = require('http');
+const os = require('os');
+
+console.log("Kubia server starting...");
+
+var handler = function(request, response) {
+  console.log("Received request from " + request.connection.remoteAddress);
+  response.writeHead(200);
+  response.end("You've hit " + os.hostname() + "\n");
+};
+
+var www = http.createServer(handler);
+www.listen(8080);
+```
+
+这里在 8080 端口启动了 HTTP 服务器,服务器会以状态码 200 OK 和文字 `"You've hit <hostname>"` 来响应每个请求.请求 handler 会把客户端的 IP 打印 到标准输出 ，以便日后查看。
+
+现在可以直接下载安装 Node.js 来测试代码了，但是这不是必需的，因为可以直接用 Docker 应用打包成镜像，这样在需要运行的主机上就无须下载和安装其他东西（当然不包括安装 Docker 来运行镜像）
+
+> 为镜像创建Dockerfile
+
+为了把应用打包成镜像，首先需要创建 个叫 Dockerfile 的文件，它包含了系列构建镜像事才会执行的指令 
+
+Dockerfile 文件需要和 app.js 文件在同一目录，并包含下面代码清单中的命令。
+
+
+
+```dockerfile
+FROM node
+ADD app.js /app.js
+ENTRYPOINT ["node", "app.js"]
+```
+
+From 行定义了镜像的起始内容（构建所基于的基础镜像） 这个例子中使用的是node 镜像的 tag 7 版本。第二行中把 app.js 文件从本地 件夹添加到镜像的根目录，保持 app.js这个文件名 
+
+最后一行定义了当镜像被运行时需要被执行的命令，这个例子中，命令是 node app.js
+
+> 构建容器镜像
+
+现在有了 Dockerfile app .js 文件，这是用来构建镜像的所有文件 运行下面 Docker 命令来构建镜像：
+
+```bash
+docker build -t kubia .
+```
+
+用户告诉 Docker 需要 于当前目录（注意命令结尾的点）构建 个叫 kubia 的镜像， Dock 会在目录中 Dockerfile ，然后于其中的指令构建镜像
+
+![image-20241225214305703](picture/image-20241225214305703.png)
+
+构建过程不是由Docker客户端进行的， 而是将整个目录的文件上传到Docker守护进程并在那里进行的。 Docker客户端和守护进程不要求在同一台机器上。 
+
+> 镜像分层
+
+镜像不是一个大的二进制块， 而是由多层组成不同镜像可能会共享分层， 这会让存储和传输变得更加高效。所有组成基础镜像的分层只会被存储一次。 拉取镜像的时候，**Docker** 会独立下载每一层。 
+
+一些分层可能已经存储在机器上了。
+
+你或许会认为每个 **Dockerfile**只创建一个新层，但是并不是这样的。构建镜像时，**Dockerfile** 中每一条单独的指令都会创建一个新层
+
+
+
+![image-20241225220006787](picture/image-20241225220006787.png)
+
+构建完成时，新的镜像会存储在本地。
+
+> 运行镜像容器
+
+```bash
+docker run --name kubia-container -p 8080:8080 -d kubia
+```
+
+这条命令告知Docker基于kubia镜像创建一个叫kubia-container的新容器。 这个容器与命令行分离(-d标志）， 这意味着在后台运行。 本机上的8080端口会被映射到容器内的8080端口(-p8080: 8080选项）， 所以可以通过http://localhost:8080访间这个应用。
+
+> 略过查看容器内部、探索容器信息
+>
+> docker exec 和 docker container inspect
+
+> 停止和删除容器
+
+可以通过告知Docker停止kubia-container容器来停止应用：
+
+```bash
+docker stop kubia-container
+```
+
+可以删除容器，想要真正地删除一个容器，需要运行docker rm
+
+```bash
+docker rm kubia-container
+```
+
+## 配置Kubernetes集群
 
